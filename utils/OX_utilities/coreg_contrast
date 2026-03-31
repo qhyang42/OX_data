@@ -1,0 +1,27 @@
+TODO: tidy up and make this into script 
+
+
+
+bet mean240814_fMRI_OX_NWU_JN_1_Accelerated_Sagittal_MPRAGE_20240814140715_25.nii testT1brain -f 0.2 -B 
+
+ fsleyes testT1brain.nii.gz mean240814_fMRI_OX_NWU_JN_1_Accelerated_Sagittal_MPRAGE_20240814140715_25.nii 
+
+cd ../coreg
+flirt -in ../func/mean240814_fMRI_OX_NWU_JN_1_Run1_MB3_ax_2iso_760TR_amyg-Brainstem_20240814140715_15.nii -ref ../wb/mean240814_fMRI_OX_NWU_JN_1_WB_MB3_ax_2iso_1750TR_amyg-Brainstem_20240814140715_5.nii -omat func2wbmat -out func2wb
+
+
+fsleyes func2wb.nii.gz ../wb/mean240814_fMRI_OX_NWU_JN_1_WB_MB3_ax_2iso_1750TR_amyg-Brainstem_20240814140715_5.nii
+
+flirt -in ../wb/mean240814_fMRI_OX_NWU_JN_1_WB_MB3_ax_2iso_1750TR_amyg-Brainstem_20240814140715_5.nii -ref ../anat/testT1brain.nii.gz -omat wb2T1mat -out wb2T1
+fsleyes wb2T1.nii.gz ../anat/mean240814_fMRI_OX_NWU_JN_1_Accelerated_Sagittal_MPRAGE_20240814140715_25.nii 
+convert_xfm -omat func2T1mat -concat wb2T1mat func2wbmat                                                 
+flirt -in ../func/mean240814_fMRI_OX_NWU_JN_1_Run1_MB3_ax_2iso_760TR_amyg-Brainstem_20240814140715_15.nii -ref ../anat/mean240814_fMRI_OX_NWU_JN_1_Accelerated_Sagittal_MPRAGE_20240814140715_25.nii -applyxfm -init func2T1mat -out func2T1
+ fsleyes func2T1.nii.gz ../anat/mean240814_fMRI_OX_NWU_JN_1_Accelerated_Sagittal_MPRAGE_20240814140715_25.nii 
+
+flirt -in ../spmT_0001.nii -applyxfm -init func2T1mat -ref ../anat/mean240814_fMRI_OX_NWU_JN_1_Accelerated_Sagittal_MPRAGE_20240814140715_25.nii -out odor_contrast_T1.nii.gz
+flirt -in ../spmT_0002.nii -applyxfm -init func2T1mat -ref ../anat/mean240814_fMRI_OX_NWU_JN_1_Accelerated_Sagittal_MPRAGE_20240814140715_25.nii -out cue_contrast_T1.nii.gz
+fslmaths odor_contrast_T1.nii.gz -thr 5.8 odor_contrast_thr0001_T1.nii.gz
+fslmaths cue_contrast_T1.nii.gz -thr 5.8 cue_contrast_thr0001_T1.nii.gz
+fsleyes odor_contrast_thr0001_T1.nii.gz cue_contrast_thr0001_T1.nii.gz ../anat/mean240814_fMRI_OX_NWU_JN_1_Accelerated_Sagittal_MPRAGE_20240814140715_25.nii 
+
+

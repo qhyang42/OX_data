@@ -1,0 +1,31 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+
+# MATLAB autosave / workspace files
+*.asv
+*.autosave
+*.m~
+*.mlx.autosave
+*.fig
+*.log
+
+# Python / cache noise in case helper scripts are added later
+__pycache__/
+*.pyc
+
+# Large project data and generated subject outputs
+MRI/
+behavior/
+cuelist/
+labchart/
+results/
+CZ_ROIs_MNI_1mm/
+
+# Design / binary exports
+*.ai
+
+# Compressed raw/reference drops
+*.zip
+
+# Keep code and lightweight helper assets tracked by default.
