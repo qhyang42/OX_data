@@ -111,7 +111,8 @@ parfor vi = 1:nVoxels_total
     X = modelmd(voxel_inds, :)'; % trials x features
     y = categoryidx';               % trials x 1
 %     y = odor; 
-    X = zscore(X);
+    % X = zscore(X);
+    X = X - mean(X, 2);
 
     preds = zeros(size(y));
     for t = 1:length(y)
@@ -138,7 +139,7 @@ parfor vi = 1:nVoxels_total
 
 end
 
-acc_per_class(acc_per_class == 1) = 0; 
+acc_per_class(acc_per_class == 1) = 0; % I don't know why this is here but it doesn't seem to do anything to the result. 
 
 gm_inds = find(gm_mask);                     % all valid gray matter voxels
 final_mask_inds = gm_inds(rmask > 0);        % linear indices into gm_mask for selected centers
@@ -214,7 +215,8 @@ for p = 1:nPerms
         end
 
         X = modelmd(voxel_inds, :)';
-        X = zscore(X);
+        % X = zscore(X);
+        X = X - mean(X, 2);
         preds = zeros(nTrials, 1);
 
         for t = 1:nTrials

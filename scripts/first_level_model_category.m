@@ -11,7 +11,7 @@ SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
 session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so far. EDIT as needed. 
 TR= 0.76; 
 
-subjidx = 5; % enter subjidx here 
+subjidx = 2; % enter subjidx here 
 subjname = ['subj_', num2str(subjidx)];  
 subjname_real = SUBJNAMES{subjidx}; 
 
@@ -111,22 +111,22 @@ matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;
 %% cue contrast 
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name = 'Person';  % Name of the condition
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).onset = cue_onsets_all(personi);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration = 0;    % Durations in seconds (or 0 for events)
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration = 5;    % Durations in seconds (or 0 for events)
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod = 0;               % Temporal modulation (0 = none)
 
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name = 'Food';
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset = cue_onsets_all(foodi);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration = 0; % use cue word onset as cue event    
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration = 5; % use cue word onset as cue event    
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod = 0;  
 
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).name = 'Location';
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).onset = cue_onsets_all(loci);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration = 0; % use cue word onset as cue event    
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration = 5; % use cue word onset as cue event    
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).tmod = 0;  
 
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name = 'Control';
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset = cue_onsets_all(controli);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration = 0; % use cue word onset as cue event    
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration = 5; % use cue word onset as cue event    
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;  
 %%
 
@@ -161,43 +161,43 @@ spm_jobman('run', matlabbatch(2));
 % matlabbatch{3}.spm.stats.con.consess{2}.tcon.sessrep = 'none';
 
 
-matlabbatch{3}.spm.stats.con.spmmat = {fullfile(mridatapath, 'SPM.mat')};
-
-matlabbatch{3}.spm.stats.con.consess{1}.tcon.name = 'person > rest';
-matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = [1, 0, 0, 0];
-matlabbatch{3}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
-
-matlabbatch{3}.spm.stats.con.consess{2}.tcon.name = 'food > rest';
-matlabbatch{3}.spm.stats.con.consess{2}.tcon.weights = [0, 1, 0, 0];
-matlabbatch{3}.spm.stats.con.consess{2}.tcon.sessrep = 'none';
-
-matlabbatch{3}.spm.stats.con.consess{3}.tcon.name = 'location > rest';
-matlabbatch{3}.spm.stats.con.consess{3}.tcon.weights = [0, 0, 1, 0];
-matlabbatch{3}.spm.stats.con.consess{3}.tcon.sessrep = 'none';
-
-matlabbatch{3}.spm.stats.con.consess{4}.tcon.name = 'control > rest';
-matlabbatch{3}.spm.stats.con.consess{4}.tcon.weights = [0, 0, 0, 1];
-matlabbatch{3}.spm.stats.con.consess{4}.tcon.sessrep = 'none';
-
-%% 
-spm_jobman('run', matlabbatch(3));
-
-%% contrast with control. 
-matlabbatch{4}.spm.stats.con.spmmat = {fullfile(mridatapath, 'SPM.mat')};
-
-matlabbatch{4}.spm.stats.con.consess{1}.tcon.name = 'person > control';
-matlabbatch{4}.spm.stats.con.consess{1}.tcon.weights = [1, 0, 0, -1];
-matlabbatch{4}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
-
-matlabbatch{4}.spm.stats.con.consess{2}.tcon.name = 'food > control';
-matlabbatch{4}.spm.stats.con.consess{2}.tcon.weights = [0, 1, 0, -1];
-matlabbatch{4}.spm.stats.con.consess{2}.tcon.sessrep = 'none';
-
-matlabbatch{4}.spm.stats.con.consess{3}.tcon.name = 'location > control';
-matlabbatch{4}.spm.stats.con.consess{3}.tcon.weights = [0, 0, 1, -1];
-matlabbatch{4}.spm.stats.con.consess{3}.tcon.sessrep = 'none';
-%% 
-spm_jobman('run', matlabbatch(4));
+% matlabbatch{3}.spm.stats.con.spmmat = {fullfile(mridatapath, 'SPM.mat')};
+% 
+% matlabbatch{3}.spm.stats.con.consess{1}.tcon.name = 'person > rest';
+% matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = [1, 0, 0, 0];
+% matlabbatch{3}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
+% 
+% matlabbatch{3}.spm.stats.con.consess{2}.tcon.name = 'food > rest';
+% matlabbatch{3}.spm.stats.con.consess{2}.tcon.weights = [0, 1, 0, 0];
+% matlabbatch{3}.spm.stats.con.consess{2}.tcon.sessrep = 'none';
+% 
+% matlabbatch{3}.spm.stats.con.consess{3}.tcon.name = 'location > rest';
+% matlabbatch{3}.spm.stats.con.consess{3}.tcon.weights = [0, 0, 1, 0];
+% matlabbatch{3}.spm.stats.con.consess{3}.tcon.sessrep = 'none';
+% 
+% matlabbatch{3}.spm.stats.con.consess{4}.tcon.name = 'control > rest';
+% matlabbatch{3}.spm.stats.con.consess{4}.tcon.weights = [0, 0, 0, 1];
+% matlabbatch{3}.spm.stats.con.consess{4}.tcon.sessrep = 'none';
+% 
+% %% 
+% spm_jobman('run', matlabbatch(3));
+% 
+% %% contrast with control. 
+% matlabbatch{4}.spm.stats.con.spmmat = {fullfile(mridatapath, 'SPM.mat')};
+% 
+% matlabbatch{4}.spm.stats.con.consess{1}.tcon.name = 'person > control';
+% matlabbatch{4}.spm.stats.con.consess{1}.tcon.weights = [1, 0, 0, -1];
+% matlabbatch{4}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
+% 
+% matlabbatch{4}.spm.stats.con.consess{2}.tcon.name = 'food > control';
+% matlabbatch{4}.spm.stats.con.consess{2}.tcon.weights = [0, 1, 0, -1];
+% matlabbatch{4}.spm.stats.con.consess{2}.tcon.sessrep = 'none';
+% 
+% matlabbatch{4}.spm.stats.con.consess{3}.tcon.name = 'location > control';
+% matlabbatch{4}.spm.stats.con.consess{3}.tcon.weights = [0, 0, 1, -1];
+% matlabbatch{4}.spm.stats.con.consess{3}.tcon.sessrep = 'none';
+% %% 
+% spm_jobman('run', matlabbatch(4));
 
 %% contrast with control. 
 matlabbatch{5}.spm.stats.con.spmmat = {fullfile(mridatapath, 'SPM.mat')};

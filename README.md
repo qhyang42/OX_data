@@ -10,3 +10,4 @@ Private working repository for the OX fMRI project.
 - `archive/`: discarded or superseded scripts
 
 Large raw and derived data directories are intentionally ignored by git.
+
