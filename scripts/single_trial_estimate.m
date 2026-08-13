@@ -1,111 +1,112 @@
 %% estimate single trial beta values with glmsingle 
 
-%% dont do this. this does not distinguish categories 
-SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
-        '240723_fMRI_OX_NWU_LS', ...
-        '240814_fMRI_OX_NWU_JN', ...
-        '240816_fMRI_OX_NWU_RR', ...
-        '241018_fMRI_OX_NWU_BN', ...
-        '250117_fMRI_OX_NWU_VS'}; 
-
-session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so far. EDIT as needed. 
-TR= 0.76; 
-
-subjidx = 5; % enter subjidx here 
-subjname = ['subj_', num2str(subjidx)];  
-subjname_real = SUBJNAMES{subjidx}; 
-
-% mridir = '/Volumes/ExtremeSSD/OX_DATA/MRI'; 
-mridir = '/Users/qhyang/Desktop/OX_DATA/MRI'; 
-
-mridatapath = fullfile(mridir, ['subj_', num2str(subjidx)], 'nifti'); % sn:subject's name
-
-% evdir = '/Volumes/ExtremeSSD/OX_DATA/labchart'; 
-evdir = '/Users/qhyang/Desktop/OX_DATA/labchart'; 
-
-nruns = 80; 
-% stimdur = 2;
-stimdur = 0; 
-
-outdir = fullfile(mridatapath, 'single_trials'); 
-
-%% get design matrix 
-%%% design matrix should be stim type * TR. 
-%%% we want a cue beta and an odor beta for each voxel to look at patterns 
-load(fullfile(evdir, [subjname, '_events.mat'])); % all events 
-
-designmat = zeros(sum(nframes), 2); % TR by stimuli 
-
-% get n of TR from event_onset and cue_onset 
-eventTR = ceil(event_onsets_vec/TR); 
-cueTR = ceil(cue_onsets_vec/TR); 
-
-designmat(eventTR, 1) = 1;
-designmat(cueTR, 2) = 1; 
-
-%% glm single only takes one stim duration
-designmat = designmat(:, 1); % odor
-% designmat = designmat(:, 2); % cue
-
-%% get data. use a functional mask/grey matter mask
-%%% use a smaller mask for proof of concept 
-
-mask = spm_vol(fullfile(mridatapath, 'coreg', 'gm_mask_thr05_func.nii')); 
-maskvol = spm_read_vols(mask); 
-maskvol = logical(maskvol);
-%%% read func data
-funcfiles = func_list(subjname_real, mridatapath, 1, session_count(subjidx));
-
-% Get data from all voxels in the mask -- from vivek's sample script
-% ARC_createsingletrials.m 
-Res_V = spm_vol(funcfiles);
-[~, XYZmm] = spm_read_vols(Res_V{1});
-XYZvx = round(Res_V{1}(1).mat\[XYZmm; ones(1,size(XYZmm,2))]);
-Res_Vol = cell2mat(Res_V);
-mask1D = maskvol(:);
-vxl = XYZvx(:,mask1D);
-voxel_act = spm_get_data(Res_Vol,vxl)';
-voxel_act = single(voxel_act);
-[r,c] = find(isnan(voxel_act));
-voxel_act(r,:) = []; % this is the input data for glmsingle
-% t_axis = (0:1:sum(nframes))*TR;
-
-%% get nuissance regressors 
-load(fullfile(mridatapath, 'motion_param.mat')); 
-
-%% put data into run-wise blocks 
-% Change to runwise blocks
-% can't seem to run without this. Let vivek know if i figure out why 
-design_m2 = cell(1,nruns);
-voxel_act2 = cell(1,nruns);
-mp2 = cell(1,nruns);
-for zz = 1:nruns
-    if zz==1
-        idx = 1:nframes(1);
-    else 
-        idx = sum(nframes(1:zz-1))+1:sum(nframes(1:zz)); 
-    end 
-
-    design_m2{zz} = designmat(idx,:);
-    voxel_act2{zz} = voxel_act(:,idx);
-    temp = R(idx,:);
-    mp2{zz} = temp;%(:,any(temp)); % Include non-zero regressors
-end
-opt.extraregressors = mp2;
-
-
-
-%% run glmsingle 
-
-% try
-    results = GLMestimatesingletrial(design_m2,voxel_act2,stimdur,TR,outdir,opt);
-% catch
-%     save(fullfile(outdir,'error_rep.mat'));
+%% Legacy. Not using. 
+%%%
+% %% dont do this. this does not distinguish categories 
+% SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
+%         '240723_fMRI_OX_NWU_LS', ...
+%         '240814_fMRI_OX_NWU_JN', ...
+%         '240816_fMRI_OX_NWU_RR', ...
+%         '241018_fMRI_OX_NWU_BN', ...
+%         '250117_fMRI_OX_NWU_VS'}; 
+% 
+% session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so far. EDIT as needed. 
+% TR= 0.76; 
+% 
+% subjidx = 5; % enter subjidx here 
+% subjname = ['subj_', num2str(subjidx)];  
+% subjname_real = SUBJNAMES{subjidx}; 
+% 
+% % mridir = '/Volumes/ExtremeSSD/OX_DATA/MRI'; 
+% mridir = '/Users/qhyang/Desktop/OX_DATA/MRI'; 
+% 
+% mridatapath = fullfile(mridir, ['subj_', num2str(subjidx)], 'nifti'); % sn:subject's name
+% 
+% % evdir = '/Volumes/ExtremeSSD/OX_DATA/labchart'; 
+% evdir = '/Users/qhyang/Desktop/OX_DATA/labchart'; 
+% 
+% nruns = 80; 
+% % stimdur = 2;
+% stimdur = 0; 
+% 
+% outdir = fullfile(mridatapath, 'single_trials'); 
+% 
+% %% get design matrix 
+% %%% design matrix should be stim type * TR. 
+% %%% we want a cue beta and an odor beta for each voxel to look at patterns 
+% load(fullfile(evdir, [subjname, '_events.mat'])); % all events 
+% 
+% designmat = zeros(sum(nframes), 2); % TR by stimuli 
+% 
+% % get n of TR from event_onset and cue_onset 
+% eventTR = ceil(event_onsets_vec/TR); 
+% cueTR = ceil(cue_onsets_vec/TR); 
+% 
+% designmat(eventTR, 1) = 1;
+% designmat(cueTR, 2) = 1; 
+% 
+% %% glm single only takes one stim duration
+% designmat = designmat(:, 1); % odor
+% % designmat = designmat(:, 2); % cue
+% 
+% %% get data. use a functional mask/grey matter mask
+% %%% use a smaller mask for proof of concept 
+% 
+% mask = spm_vol(fullfile(mridatapath, 'coreg', 'gm_mask_thr05_func.nii')); 
+% maskvol = spm_read_vols(mask); 
+% maskvol = logical(maskvol);
+% %%% read func data
+% funcfiles = func_list(subjname_real, mridatapath, 1, session_count(subjidx));
+% 
+% % Get data from all voxels in the mask -- from vivek's sample script
+% % ARC_createsingletrials.m 
+% Res_V = spm_vol(funcfiles);
+% [~, XYZmm] = spm_read_vols(Res_V{1});
+% XYZvx = round(Res_V{1}(1).mat\[XYZmm; ones(1,size(XYZmm,2))]);
+% Res_Vol = cell2mat(Res_V);
+% mask1D = maskvol(:);
+% vxl = XYZvx(:,mask1D);
+% voxel_act = spm_get_data(Res_Vol,vxl)';
+% voxel_act = single(voxel_act);
+% [r,c] = find(isnan(voxel_act));
+% voxel_act(r,:) = []; % this is the input data for glmsingle
+% % t_axis = (0:1:sum(nframes))*TR;
+% 
+% %% get nuissance regressors 
+% load(fullfile(mridatapath, 'motion_param.mat')); 
+% 
+% %% put data into run-wise blocks 
+% % Change to runwise blocks
+% % can't seem to run without this. Let vivek know if i figure out why 
+% design_m2 = cell(1,nruns);
+% voxel_act2 = cell(1,nruns);
+% mp2 = cell(1,nruns);
+% for zz = 1:nruns
+%     if zz==1
+%         idx = 1:nframes(1);
+%     else 
+%         idx = sum(nframes(1:zz-1))+1:sum(nframes(1:zz)); 
+%     end 
+% 
+%     design_m2{zz} = designmat(idx,:);
+%     voxel_act2{zz} = voxel_act(:,idx);
+%     temp = R(idx,:);
+%     mp2{zz} = temp;%(:,any(temp)); % Include non-zero regressors
 % end
+% opt.extraregressors = mp2;
+% 
+% 
+% 
+% %% run glmsingle 
+% 
+% % try
+%     results = GLMestimatesingletrial(design_m2,voxel_act2,stimdur,TR,outdir,opt);
+% % catch
+% %     save(fullfile(outdir,'error_rep.mat'));
+% % end
 
 
-
-%% try plot beta across voxels 
+%%% try plot beta across voxels 
 
 % clear; 
 % SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
@@ -171,7 +172,7 @@ opt.extraregressors = mp2;
 % 
 % lgd = legend(lobj(1:4), {'PERSON', 'FOOD', 'LOCATION', 'CONTROL'});
 
-%% alternatively -- treat odors from different category as 4 different types of events
+%% treat odors from different category as 4 different types of events
 %%%% this is the correct method (at least what vivek did). 
 SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
         '240723_fMRI_OX_NWU_LS', ...
@@ -196,12 +197,14 @@ mridatapath = fullfile(mridir, ['subj_', num2str(subjidx)], 'nifti'); % sn:subje
 evdir = '/Users/qhyang/Desktop/OX_DATA/labchart'; 
 
 nruns = 80; 
-stimdur = 2;
-% stimdur = 5;
+% stimdur = 2; % Odor
+% stimdur = 5; % Cue
+stimdur = 0; % Countdown cue 
 
-outdir = fullfile(mridatapath, 'single_trial_by_category'); 
 
-%% get design matrix 
+outdir = fullfile(mridatapath, 'countdown_single_trial_by_category'); 
+
+%%% get design matrix 
 %%% design matrix should be stim type * TR. 
 %%% we want a cue beta and an odor beta for each voxel to look at patterns 
 load(fullfile(evdir, [subjname, '_events.mat'])); % all events 
@@ -209,8 +212,11 @@ load(fullfile(evdir, [subjname, '_events.mat'])); % all events
 designmat = zeros(sum(nframes), 4); % TR by stimuli 
 
 % get n of TR from event_onset and cue_onset 
-eventTR = ceil(event_onsets_vec/TR); 
-% cueTR = ceil(cue_onsets_vec/TR); 
+countdown_onsets = event_onsets_vec-3; 
+
+% eventTR = ceil(event_onsets_vec/TR); % Odor 
+eventTR = ceil(countdown_onsets/TR); % Countdown
+% cueTR = ceil(cue_onsets_vec/TR); % Cue
 
 
 [odor, category] = OX_get_odor(subjname); 
@@ -229,7 +235,7 @@ designmat(eventTR(controli), 4) = 1;
 % designmat(cueTR(loci), 3) = 1;
 % designmat(cueTR(controli), 4) = 1;
 
-%% get data. use a functional mask/grey matter mask
+%%% get data. use a functional mask/grey matter mask
 %%% use a smaller mask for proof of concept 
 
 mask = spm_vol(fullfile(mridatapath, 'coreg', 'gm_mask_thr05_func.nii')); 
@@ -252,10 +258,10 @@ voxel_act = single(voxel_act);
 voxel_act(r,:) = []; % this is the input data for 
 t_axis = (0:1:sum(nframes))*TR;
 
-%% get nuissance regressors 
+%%% get nuissance regressors 
 load(fullfile(mridatapath, 'motion_param.mat')); 
 
-%% put data into run-wise blocks 
+%%% put data into run-wise blocks 
 % Change to runwise blocks
 % can't seem to run without this. Let vivek know if i figure out why 
 design_m2 = cell(1,nruns);
@@ -304,13 +310,9 @@ opt.extraregressors = mp2;
 % 
 % opt.extraregressors = mp2;
 
-%% run glmsingle 
+%%% run glmsingle 
+results = GLMestimatesingletrial(design_m2,voxel_act2,stimdur,TR,outdir,opt);
 
-% try
-    results = GLMestimatesingletrial(design_m2,voxel_act2,stimdur,TR,outdir,opt);
-% catch
-%     save(fullfile(outdir,'error_rep.mat'));
-% end
 
 
 %% quick check 

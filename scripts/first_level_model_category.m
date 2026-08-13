@@ -11,7 +11,7 @@ SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
 session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so far. EDIT as needed. 
 TR= 0.76; 
 
-subjidx = 2; % enter subjidx here 
+subjidx = 6; % enter subjidx here 
 subjname = ['subj_', num2str(subjidx)];  
 subjname_real = SUBJNAMES{subjidx}; 
 
@@ -107,6 +107,30 @@ matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name = 'Control';
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset = event_onsets_vec(controli);    % Onsets in seconds
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration = 2; % use cue word onset as cue event    
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;  
+
+%% countdown event contrast 
+
+countdown_onsets = event_onsets_vec-3; 
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name = 'Person';  % Name of the condition
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).onset = countdown_onsets(personi);    % Onsets in seconds
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration = 0;    % Durations in seconds (or 0 for events)
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod = 0;               % Temporal modulation (0 = none)
+
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name = 'Food';
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset = countdown_onsets(foodi);    % Onsets in seconds
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration = 0; 
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod = 0;  
+
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).name = 'Location';
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).onset = countdown_onsets(loci);    % Onsets in seconds
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration = 0; 
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).tmod = 0;  
+
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name = 'Control';
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset = countdown_onsets(controli);    % Onsets in seconds
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration = 0; 
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;  
+
 
 %% cue contrast 
 matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name = 'Person';  % Name of the condition
@@ -218,16 +242,29 @@ spm_jobman('run', matlabbatch(5));
 
 
 %% calculate fwe corrected T threshold 
+% load(fullfile(mridatapath, 'SPM.mat'));
+% 
+% df = [SPM.xX.erdf SPM.xX.trRV];  % Error df and residual variance
+% 
+% % Compute FWE-corrected voxel-level threshold
+% p_fwe = 0.001;  % Desired FWE-corrected significance level
+% STAT = 'T';    % Statistic type ('T' for T-maps)
+% R = SPM.xVol.R;  % Resels (spatial smoothness of the data)
+% n_voxels = prod(SPM.xVol.DIM);  % Number of voxels
+% u = spm_uc(p_fwe, df, STAT, R, 1, n_voxels);  % FWE threshold
+
 load(fullfile(mridatapath, 'SPM.mat'));
 
-df = [SPM.xX.erdf SPM.xX.trRV];  % Error df and residual variance
+Ic = 1;  % index of the T contrast you want to threshold. effectively this makes no difference because the contrasts are estimated from the same SPM file. 
 
-% Compute FWE-corrected voxel-level threshold
-p_fwe = 0.001;  % Desired FWE-corrected significance level
-STAT = 'T';    % Statistic type ('T' for T-maps)
-R = SPM.xVol.R;  % Resels (spatial smoothness of the data)
-n_voxels = prod(SPM.xVol.DIM);  % Number of voxels
-u = spm_uc(p_fwe, df, STAT, R, 1, n_voxels);  % FWE threshold
+p_fwe = 0.001;
+
+df   = [SPM.xCon(Ic).eidf, SPM.xX.erdf];
+STAT = SPM.xCon(Ic).STAT;
+R    = SPM.xVol.R;
+S    = SPM.xVol.S;
+
+u = spm_uc(p_fwe, df, STAT, R, 1, S);
 
 
 %% contrast by category 
