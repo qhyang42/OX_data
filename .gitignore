@@ -21,6 +21,7 @@ cuelist/
 labchart/
 results/
 CZ_ROIs_MNI_1mm/
+data_collection_notes/
 
 # Design / binary exports
 *.ai

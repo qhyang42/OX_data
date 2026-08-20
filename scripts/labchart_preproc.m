@@ -16,7 +16,7 @@ session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so f
 % wkdir = '/Volumes/ExtremeSSD/OX_DATA/labchart'; 
 wkdir = '/Users/qhyang/Desktop/OX_DATA/labchart'; 
 
-subjidx = 4; % enter subjidx here 
+subjidx = 5; % enter subjidx here 
 
 subjname = ['subj_', num2str(subjidx)];  
 subjname_real = SUBJNAMES{subjidx}; 
