@@ -184,7 +184,7 @@ SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
 session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so far. EDIT as needed. 
 TR= 0.76; 
 
-subjidx = 5; % enter subjidx here 
+subjidx = 6; % enter subjidx here 
 subjname = ['subj_', num2str(subjidx)];  
 subjname_real = SUBJNAMES{subjidx}; 
 

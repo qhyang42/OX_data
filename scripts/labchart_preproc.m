@@ -124,7 +124,7 @@ end
 %%% start from segment 6) 
 
 %% save raw labchart data  
-save("labchart/subj4_events_raw.mat", "eventdata"); 
+% save("labchart/subj4_events_raw.mat", "eventdata"); 
 
 
 %% crude sniff onset with SNIFF pulse 

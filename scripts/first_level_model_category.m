@@ -11,7 +11,7 @@ SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
 session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so far. EDIT as needed. 
 TR= 0.76; 
 
-subjidx = 6; % enter subjidx here 
+subjidx = 2; % enter subjidx here 
 subjname = ['subj_', num2str(subjidx)];  
 subjname_real = SUBJNAMES{subjidx}; 
 
@@ -88,25 +88,25 @@ matlabbatch{1}.spm.stats.fmri_spec.sess.scans = filename;
 % Specify the conditions (onsets and durations)
 
 %% odor contrast 
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name = 'Person';  % Name of the condition
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).onset = event_onsets_vec(personi);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration = 2;    % Durations in seconds (or 0 for events)
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod = 0;               % Temporal modulation (0 = none)
-
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name = 'Food';
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset = event_onsets_vec(foodi);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration = 2; % use cue word onset as cue event    
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod = 0;  
-
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).name = 'Location';
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).onset = event_onsets_vec(loci);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration = 2; % use cue word onset as cue event    
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).tmod = 0;  
-
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name = 'Control';
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset = event_onsets_vec(controli);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration = 2; % use cue word onset as cue event    
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;  
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name = 'Person';  % Name of the condition
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).onset = event_onsets_vec(personi);    % Onsets in seconds
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration = 2;    % Durations in seconds (or 0 for events)
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod = 0;               % Temporal modulation (0 = none)
+% 
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name = 'Food';
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset = event_onsets_vec(foodi);    % Onsets in seconds
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration = 2; % use cue word onset as cue event    
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod = 0;  
+% 
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).name = 'Location';
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).onset = event_onsets_vec(loci);    % Onsets in seconds
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration = 2; % use cue word onset as cue event    
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).tmod = 0;  
+% 
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name = 'Control';
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset = event_onsets_vec(controli);    % Onsets in seconds
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration = 2; % use cue word onset as cue event    
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;  
 
 %% countdown event contrast 
 
@@ -133,25 +133,25 @@ matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;
 
 
 %% cue contrast 
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name = 'Person';  % Name of the condition
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).onset = cue_onsets_all(personi);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration = 5;    % Durations in seconds (or 0 for events)
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod = 0;               % Temporal modulation (0 = none)
-
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name = 'Food';
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset = cue_onsets_all(foodi);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration = 5; % use cue word onset as cue event    
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod = 0;  
-
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).name = 'Location';
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).onset = cue_onsets_all(loci);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration = 5; % use cue word onset as cue event    
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).tmod = 0;  
-
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name = 'Control';
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset = cue_onsets_all(controli);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration = 5; % use cue word onset as cue event    
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;  
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name = 'Person';  % Name of the condition
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).onset = cue_onsets_all(personi);    % Onsets in seconds
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration = 5;    % Durations in seconds (or 0 for events)
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod = 0;               % Temporal modulation (0 = none)
+% 
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name = 'Food';
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset = cue_onsets_all(foodi);    % Onsets in seconds
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration = 5; % use cue word onset as cue event    
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod = 0;  
+% 
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).name = 'Location';
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).onset = cue_onsets_all(loci);    % Onsets in seconds
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration = 5; % use cue word onset as cue event    
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).tmod = 0;  
+% 
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name = 'Control';
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset = cue_onsets_all(controli);    % Onsets in seconds
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration = 5; % use cue word onset as cue event    
+% matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod = 0;  
 %%
 
 matlabbatch{1}.spm.stats.fmri_spec.sess.hpf = 128; 
@@ -164,11 +164,12 @@ matlabbatch{2}.spm.stats.fmri_est.spmmat = {fullfile(mridatapath, 'SPM.mat')};
 
 %% specify
 spm_jobman('run', matlabbatch(1));
+
 %% add run specific regressors 
 spm_fmri_concatenate(fullfile(mridatapath, 'SPM.mat'), nframes');
 
 %% estimate 
-spm_jobman('run', matlabbatch(2));
+spm_jobman('run', matlabbatch(2)); 
 
 %% contrast
 % load(fullfile(mridatapath, 'SPM.mat'));

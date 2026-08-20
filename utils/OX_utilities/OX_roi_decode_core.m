@@ -3,11 +3,10 @@ function results = OX_roi_decode_core(subjidx, target, varargin)
 %
 %   results = OX_roi_decode_core(subjidx, target, Name, Value, ...)
 %
-% The function discovers all *_func_thr02 ROI masks in
-% coreg/roi_decoding, maps them to GLMsingle rows through the functional
-% gray-matter mask, and evaluates one decoder with one cross-validation
-% scheme. Data preparation and permutation inference follow the current
-% searchlight implementation.
+% The function discovers ROI masks from the selected coreg/roi_decoding
+% set, maps them to GLMsingle rows through the functional gray-matter mask,
+% and evaluates one decoder with one cross-validation scheme. Data
+% preparation and permutation inference follow the searchlight pipeline.
 %
 % Required inputs:
 %   subjidx                 Numeric subject index.
@@ -18,7 +17,10 @@ function results = OX_roi_decode_core(subjidx, target, varargin)
 %   'CrossValidation'       'leave-one-run-out' (default),
 %                           'leave-one-out', or '10-fold'.
 %   'MRIRoot'               MRI root; auto-detected when empty.
-%   'ROIDir'                ROI directory; defaults to coreg/roi_decoding.
+%   'ROISelection'          'old' (default), 'primary', 'secondary', or
+%                           'all' (primary + secondary).
+%   'ROIDir'                Optional roi_decoding root or legacy flat
+%                           directory override.
 %   'NumRuns'               Number of runs used to infer labels (80).
 %   'RunLabels'             Exact trial-wise run labels; preferred.
 %   'R2Threshold'           GLMsingle R2 cutoff (0.5).
@@ -53,6 +55,8 @@ addRequired(p, 'target', @(x) any(strcmpi(string(x), ["context", "odor"])));
 addParameter(p, 'Decoder', 'template', @(x) ischar(x) || (isstring(x) && isscalar(x)));
 addParameter(p, 'CrossValidation', 'leave-one-run-out', @(x) ischar(x) || (isstring(x) && isscalar(x)));
 addParameter(p, 'MRIRoot', '', @(x) ischar(x) || isstring(x));
+addParameter(p, 'ROISelection', 'old', ...
+    @(x) ischar(x) || (isstring(x) && isscalar(x)));
 addParameter(p, 'ROIDir', '', @(x) ischar(x) || isstring(x));
 addParameter(p, 'NumRuns', 80, @(x) isnumeric(x) && isscalar(x) && x >= 2 && x == round(x));
 addParameter(p, 'RunLabels', [], @(x) isempty(x) || (isnumeric(x) && isvector(x)));
@@ -72,10 +76,12 @@ parse(p, subjidx, target, varargin{:});
 opts = p.Results;
 
 target = lower(char(string(target)));
+roi_selection = OX_normalize_decoding_roi_selection(opts.ROISelection);
 [decoder, metric_name, metric_null] = normalize_decoder(opts.Decoder);
 [cv_method, cv_short_name] = normalize_cv_method(opts.CrossValidation);
 opts.Decoder = decoder;
 opts.CrossValidation = cv_method;
+opts.ROISelection = roi_selection;
 
 SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
              '240723_fMRI_OX_NWU_LS', ...
@@ -92,18 +98,17 @@ subjname_real = SUBJNAMES{subjidx};
 analysis_tic = tic;
 mriroot = resolve_mri_root(opts.MRIRoot);
 mridatapath = fullfile(mriroot, subjname, 'nifti');
-base_outdir = fullfile(mridatapath, 'single_trial_by_category');
+[roi_selection, roi_dirs] = OX_resolve_decoding_roi_selection( ...
+    mridatapath, roi_selection, opts.ROIDir);
+% base_outdir = fullfile(mridatapath, 'single_trial_by_category'); % for
+% sniff aligned beta
+base_outdir = fullfile(mridatapath, 'countdown_single_trial_by_category'); % for countdown aligned beta.
+
 fit_file = fullfile(base_outdir, 'TYPED_FITHRF_GLMDENOISE_RR.mat');
 gm_mask_file = fullfile(mridatapath, 'coreg', 'gm_mask_thr05_func.nii');
-if strlength(string(opts.ROIDir)) == 0
-    roi_dir = fullfile(mridatapath, 'coreg', 'roi_decoding');
-else
-    roi_dir = char(string(opts.ROIDir));
-end
 
 assert(isfile(fit_file), 'Missing GLMsingle file: %s', fit_file);
 assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
-assert(isfolder(roi_dir), 'Missing ROI directory: %s', roi_dir);
 if strcmp(decoder, 'svm')
     assert(exist('fitcecoc', 'file') == 2 && exist('templateSVM', 'file') == 2, ...
         'SVM decoding requires Statistics and Machine Learning Toolbox.');
@@ -146,6 +151,8 @@ fprintf('Subject: %s (%s) | Trials: %d | Runs: %d | Classes: %d\n', ...
     subjname, subjname_real, nTrials, nRuns, nClasses);
 fprintf('Decoder: %s | Metric: %s | Null: %.4f | CV folds: %d\n', ...
     decoder, metric_name, metric_null, nFolds);
+fprintf('ROI selection: %s | Directories: %s\n', ...
+    roi_selection, strjoin(string(roi_dirs), ', '));
 fprintf('Subtracted each voxel''s within-run mean before ROI extraction.\n');
 print_class_counts(y, class_values);
 
@@ -173,9 +180,9 @@ assert(size(modelmd, 1) == numel(gm_inds), ...
     ['Mapping check failed: modelmd has %d rows but find(gm_mask) has %d voxels. ' ...
      'modelmd row i must correspond to gm_inds(i).'], size(modelmd, 1), numel(gm_inds));
 
-[roi_files, roi_stems] = discover_roi_files(roi_dir, opts.MaxROIs);
+[roi_files, roi_stems, manifest] = OX_discover_decoding_roi_files( ...
+    roi_dirs, false, opts.MaxROIs);
 nROIs = numel(roi_files);
-manifest = load_roi_manifest(fullfile(roi_dir, 'roi_manifest.tsv'));
 
 model_index_volume = zeros(size(gm_mask), 'uint32');
 model_index_volume(gm_inds) = uint32(1:numel(gm_inds));
@@ -189,7 +196,7 @@ n_gm_overlap = zeros(nROIs, 1);
 n_features_used = zeros(nROIs, 1);
 status = repmat("ok", nROIs, 1);
 
-fprintf('Loading %d ROI masks from %s\n', nROIs, roi_dir);
+fprintf('Loading %d ROI masks for ROISelection=%s.\n', nROIs, roi_selection);
 for roi_idx = 1:nROIs
     roi_file = roi_files{roi_idx};
     roi_header = spm_vol(roi_file);
@@ -378,8 +385,14 @@ summary = table(roi_names, roi_sources, roi_hemispheres, roi_labels, roi_file_st
     'null_percentile95'});
 
 if strlength(string(opts.OutputDir)) == 0
-    output_dir = fullfile(base_outdir, ...
-        sprintf('roi_decoding_%s_%s_%s', target, decoder, cv_short_name));
+    if strcmp(roi_selection, 'old')
+        output_name = sprintf('roi_decoding_%s_%s_%s', ...
+            target, decoder, cv_short_name);
+    else
+        output_name = sprintf('roi_decoding_%s_%s_%s_%s', ...
+            roi_selection, target, decoder, cv_short_name);
+    end
+    output_dir = fullfile(base_outdir, output_name);
 else
     output_dir = char(string(opts.OutputDir));
 end
@@ -387,6 +400,7 @@ end
 results = struct();
 results.subject = struct('index', subjidx, 'name', subjname, 'name_real', subjname_real);
 results.analysis = struct('target', target, 'decoder', decoder, ...
+    'roi_selection', roi_selection, ...
     'cross_validation', cv_method, 'metric', metric_name, 'metric_null', metric_null);
 results.classes = struct('values', {class_values}, ...
     'counts', accumarray(y, 1, [nClasses, 1]), 'chance', chance);
@@ -586,49 +600,6 @@ for ci = 1:numel(counts)
         label = char(string(class_values{ci}));
     end
     fprintf('  %2d  %-20s  %d\n', ci, label, counts(ci));
-end
-end
-
-%% ------------------------------------------------------------------------
-function [roi_files, roi_stems] = discover_roi_files(roi_dir, max_rois)
-entries = [dir(fullfile(roi_dir, '*_func_thr02.nii')); ...
-           dir(fullfile(roi_dir, '*_func_thr02.nii.gz'))];
-assert(~isempty(entries), 'No *_func_thr02 NIfTI masks found in %s.', roi_dir);
-names = string({entries.name})';
-stems = arrayfun(@nifti_stem, names);
-[unique_stems, ~, group] = unique(lower(stems));
-duplicates = unique_stems(accumarray(group, 1) > 1);
-assert(isempty(duplicates), 'Duplicate ROI basenames found: %s', strjoin(duplicates, ', '));
-[~, order] = sort(lower(names));
-entries = entries(order);
-names = names(order);
-stems = stems(order);
-if isfinite(max_rois) && max_rois < numel(entries)
-    entries = entries(1:max_rois);
-    names = names(1:max_rois);
-    stems = stems(1:max_rois);
-    warning('MaxROIs=%d: running a smoke-test subset, not the full ROI analysis.', max_rois);
-end
-roi_files = cellstr(fullfile(string({entries.folder})', names));
-roi_stems = cellstr(stems);
-end
-
-%% ------------------------------------------------------------------------
-function stem = nifti_stem(filename)
-stem = regexprep(string(filename), '\.nii(\.gz)?$', '', 'ignorecase');
-end
-
-%% ------------------------------------------------------------------------
-function manifest = load_roi_manifest(manifest_file)
-if isfile(manifest_file)
-    manifest = readtable(manifest_file, 'FileType', 'text', 'Delimiter', '\t', 'TextType', 'string');
-    required = ["source", "contributing_labels", "hemisphere", "output_file"];
-    assert(all(ismember(required, string(manifest.Properties.VariableNames))), ...
-        'ROI manifest lacks one or more required columns: %s', manifest_file);
-    manifest.output_stem = arrayfun(@nifti_stem, manifest.output_file);
-else
-    warning('ROI manifest not found; source and label metadata will be inferred where possible.');
-    manifest = table();
 end
 end
 

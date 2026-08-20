@@ -21,6 +21,8 @@ function results = OX_olfroi_decode_core(subjidx, target, varargin)
 %
 % Important name-value options:
 %   'MRIRoot'               MRI root; auto-detected when empty.
+%   'ROISelection'          'old' (default), 'primary', 'secondary', or
+%                           'all' (primary + secondary).
 %   'NumRuns'               Independent consecutive runs (default 80).
 %   'NumOuterFolds'         Run-blocked outer folds (default 10).
 %   'NumInnerFolds'         Run-blocked inner folds (default 5).
@@ -36,7 +38,7 @@ function results = OX_olfroi_decode_core(subjidx, target, varargin)
 %   'OutputDir'             Output directory; generated when empty.
 %   'SaveOutputs'           Save results MAT file (true).
 %
-% Primary ROI hierarchy:
+% Legacy hierarchy used when ROISelection='old':
 %   olf_primary_bilateral   union(AON, TU, pirF, pirT)
 %   olf_amygdala_bilateral union(ACo, MeA, PAC, PCo)
 % followed by the eight bilateral component masks.
@@ -47,6 +49,8 @@ p.FunctionName = mfilename;
 addRequired(p, 'subjidx', @(x) isnumeric(x) && isscalar(x) && isfinite(x) && x == round(x));
 addRequired(p, 'target', @(x) any(strcmpi(string(x), ["context", "odor"])));
 addParameter(p, 'MRIRoot', '', @(x) ischar(x) || isstring(x));
+addParameter(p, 'ROISelection', 'old', ...
+    @(x) ischar(x) || (isstring(x) && isscalar(x)));
 addParameter(p, 'NumRuns', 80, @(x) isnumeric(x) && isscalar(x) && x >= 2 && x == round(x));
 addParameter(p, 'NumOuterFolds', 10, @(x) isnumeric(x) && isscalar(x) && x >= 2 && x == round(x));
 addParameter(p, 'NumInnerFolds', 5, @(x) isnumeric(x) && isscalar(x) && x >= 2 && x == round(x));
@@ -71,6 +75,7 @@ opts.SVMBoxConstraints = unique(double(opts.SVMBoxConstraints(:)'), 'stable');
 opts.LDAGammas = unique(double(opts.LDAGammas(:)'), 'stable');
 opts.ROINames = string(opts.ROINames);
 opts.ROINames = opts.ROINames(:);
+opts.ROISelection = OX_normalize_decoding_roi_selection(opts.ROISelection);
 target = lower(char(string(target)));
 
 assert(~isempty(opts.SVMBoxConstraints) || ~isempty(opts.LDAGammas), ...
@@ -98,10 +103,10 @@ mridatapath = fullfile(mriroot, subjname, 'nifti');
 base_outdir = fullfile(mridatapath, 'single_trial_by_category');
 fit_file = fullfile(base_outdir, 'TYPED_FITHRF_GLMDENOISE_RR.mat');
 gm_mask_file = fullfile(mridatapath, 'coreg', 'gm_mask_thr05_func.nii');
-roi_dir = fullfile(mridatapath, 'coreg', 'roi_decoding');
+[roi_selection, roi_dirs] = OX_resolve_decoding_roi_selection( ...
+    mridatapath, opts.ROISelection, '');
 assert(isfile(fit_file), 'Missing GLMsingle file: %s', fit_file);
 assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
-assert(isfolder(roi_dir), 'Missing ROI directory: %s', roi_dir);
 assert(exist('fitcecoc', 'file') == 2 && exist('templateSVM', 'file') == 2, ...
     'Nested SVM decoding requires Statistics and Machine Learning Toolbox.');
 assert(exist('fitcdiscr', 'file') == 2, ...
@@ -136,6 +141,8 @@ fprintf('Subject: %s (%s) | Trials: %d | Runs: %d x %d trials\n', ...
     subjname, subjname_real, nTrials, opts.NumRuns, trials_per_run);
 fprintf('Target: %s | Classes: %d | Chance: %.4f | Outer/inner folds: %d/%d\n', ...
     target, nClasses, chance, opts.NumOuterFolds, opts.NumInnerFolds);
+fprintf('ROI selection: %s | Directories: %s\n', ...
+    roi_selection, strjoin(string(roi_dirs), ', '));
 print_class_counts(y, class_values);
 
 %% Load focused ROI feature sets
@@ -148,7 +155,13 @@ assert(size(modelmd, 1) == numel(gm_inds), ...
 model_index_volume = zeros(size(gm_mask), 'uint32');
 model_index_volume(gm_inds) = uint32(1:numel(gm_inds));
 
-[roi_defs, component_masks] = define_and_load_rois(roi_dir, gm_header, opts.ROINames);
+if strcmp(roi_selection, 'old')
+    [roi_defs, component_masks] = define_and_load_rois( ...
+        roi_dirs{1}, gm_header, opts.ROINames);
+else
+    [roi_defs, component_masks] = define_and_load_selected_rois( ...
+        roi_dirs, gm_header, opts.ROINames, roi_selection);
+end
 nROIs = height(roi_defs);
 roi_features = cell(nROIs, 1);
 n_mask_voxels = zeros(nROIs, 1);
@@ -356,15 +369,22 @@ if opts.RunTemplateBackup
 end
 
 if strlength(string(opts.OutputDir)) == 0
-    output_dir = fullfile(base_outdir, sprintf('olfroi_decoding_%s_nested_kfold%d', ...
-        target, opts.NumOuterFolds));
+    if strcmp(roi_selection, 'old')
+        output_name = sprintf('olfroi_decoding_%s_nested_kfold%d', ...
+            target, opts.NumOuterFolds);
+    else
+        output_name = sprintf('olfroi_decoding_%s_%s_nested_kfold%d', ...
+            roi_selection, target, opts.NumOuterFolds);
+    end
+    output_dir = fullfile(base_outdir, output_name);
 else
     output_dir = char(string(opts.OutputDir));
 end
 
 results = struct();
 results.subject = struct('index', subjidx, 'name', subjname, 'name_real', subjname_real);
-results.analysis = struct('target', target, 'primary_decoder', 'nested_model_selection', ...
+results.analysis = struct('target', target, 'roi_selection', roi_selection, ...
+    'primary_decoder', 'nested_model_selection', ...
     'metric', 'balanced_accuracy', 'chance', chance, ...
     'run_structure', sprintf('%d consecutive independent runs x %d trials', ...
     opts.NumRuns, trials_per_run));
@@ -559,6 +579,37 @@ source_masks = ["AON,TU,pirF,pirT"; "ACo,MeA,PAC,PCo"; ...
     "AON"; "TU"; "pirF"; "pirT"; "ACo"; "MeA"; "PAC"; "PCo"];
 component_keys = {{'AON', 'TU', 'pirF', 'pirT'}; {'ACo', 'MeA', 'PAC', 'PCo'}; ...
     {'AON'}; {'TU'}; {'pirF'}; {'pirT'}; {'ACo'}; {'MeA'}; {'PAC'}; {'PCo'}};
+defs = table(roi_name, roi_level, roi_family, source_masks, component_keys);
+
+if ~isempty(requested)
+    [known, position] = ismember(lower(requested), lower(defs.roi_name));
+    assert(all(known), 'Unknown ROINames: %s', strjoin(requested(~known), ', '));
+    assert(numel(unique(position)) == numel(position), 'ROINames contains duplicates.');
+    defs = defs(position, :);
+end
+end
+
+%% ------------------------------------------------------------------------
+function [defs, component_masks] = define_and_load_selected_rois( ...
+        roi_dirs, ref_header, requested, selection)
+[mask_files, stems] = OX_discover_decoding_roi_files(roi_dirs, true, Inf);
+n_masks = numel(mask_files);
+component_masks = struct();
+roi_name = strings(n_masks, 1);
+roi_level = repmat("selected_set", n_masks, 1);
+roi_family = repmat(string(selection), n_masks, 1);
+source_masks = strings(n_masks, 1);
+component_keys = cell(n_masks, 1);
+
+for index = 1:n_masks
+    key = sprintf('mask_%03d', index);
+    header = spm_vol(mask_files{index});
+    assert_same_geometry(header, ref_header, mask_files{index});
+    component_masks.(key) = spm_read_vols(header) > 0;
+    roi_name(index) = erase(string(stems{index}), "_func_thr02");
+    source_masks(index) = string(mask_files{index});
+    component_keys{index} = {key};
+end
 defs = table(roi_name, roi_level, roi_family, source_masks, component_keys);
 
 if ~isempty(requested)
