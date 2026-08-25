@@ -22,6 +22,11 @@ labchart/
 results/
 CZ_ROIs_MNI_1mm/
 data_collection_notes/
+glmsingle_confounds_qc*/
+tmp/
+ROIs/
+motion_qc/
+
 
 # Design / binary exports
 *.ai

@@ -16,7 +16,7 @@ session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so f
 % wkdir = '/Volumes/ExtremeSSD/OX_DATA/labchart'; 
 wkdir = '/Users/qhyang/Desktop/OX_DATA/labchart'; 
 
-subjidx = 5; % enter subjidx here 
+subjidx = 6; % enter subjidx here 
 
 subjname = ['subj_', num2str(subjidx)];  
 subjname_real = SUBJNAMES{subjidx}; 
@@ -37,7 +37,7 @@ nrun = [];
 for sessionID = 1: session_count(subjidx) 
     
     try 
-        load(fullfile(wkdir, [subjname, '_ses', num2str(sessionID)])); 
+        load(fullfile(wkdir, 'raw_data', [subjname, '_ses', num2str(sessionID)])); 
     catch
         continue 
     end 
@@ -62,8 +62,53 @@ for sessionID = 1: session_count(subjidx)
       end 
     
       if subjidx == 6 && sessionID == 6
-         tidx(6) = 0; 
+         tidx(7) = 0; 
       end 
+
+      %%% exception: subj4ses12 run1(block2) has missing scanner TTL at the
+      %%% beginning due to BNC cable being plugged in after scanner start
+      %%% time (visually confirmed with a baseline shift). Pad the scanner
+      %%% TTL so it matches nframes at the beginning.
+      if subjidx == 4 && sessionID == 12
+          blockidx = 2;
+          mri_data = data(datastart(4, blockidx):dataend(4, blockidx));
+          mri_binary = mri_data > 1;
+          mri_rises = find(diff([false, mri_binary]) == 1);
+          mri_falls = find(diff([mri_binary, false]) == -1);
+
+          mri_file = dir(fullfile(mridatapath, 'func', ...
+              [subjname_real, '_', num2str(sessionID), '_Run1_*.nii']));
+          if numel(mri_file) ~= 1
+              error('Expected one subject 4 session 12 run 1 NIfTI, found %d.', ...
+                  numel(mri_file));
+          end
+          mri_info = niftiinfo(fullfile(mri_file.folder, mri_file.name));
+          expected_nframes = mri_info.ImageSize(4);
+          n_missing_ttls = expected_nframes - numel(mri_rises);
+
+          if n_missing_ttls < 0
+              error('LabChart block 2 has more scanner TTLs than fMRI frames.');
+          elseif n_missing_ttls > 0
+              tr_samples = round(median(diff(mri_rises)));
+              pulse_width = round(median(mri_falls - mri_rises + 1));
+              pulse_template = mri_data(mri_rises(1):mri_rises(1) + pulse_width - 1);
+              padded_rises = mri_rises(1) - (n_missing_ttls:-1:1) * tr_samples;
+
+              if padded_rises(1) < 1
+                  error('Not enough leading samples to pad the missing scanner TTLs.');
+              end
+              for onset = padded_rises
+                  mri_data(onset:onset + pulse_width - 1) = pulse_template;
+              end
+              data(datastart(4, blockidx):dataend(4, blockidx)) = mri_data;
+          end
+
+          padded_count = sum(diff([false, mri_data > 1]) == 1);
+          if padded_count ~= expected_nframes
+              error('Padded scanner TTL count (%d) does not match nframes (%d).', ...
+                  padded_count, expected_nframes);
+          end
+      end
 
 
       data_chunks = cell(sum(tidx), 1); 
@@ -80,6 +125,12 @@ for sessionID = 1: session_count(subjidx)
         var_resp = who('C1B*'); 
         var_daq = who('C2B*'); 
         var_mri = who('C4B*'); 
+        [~, idx] = sort(cellfun(@(x) sscanf(x, 'C1B%d'), var_resp));
+        var_resp = var_resp(idx);
+        [~, idx] = sort(cellfun(@(x) sscanf(x, 'C2B%d'), var_daq));
+        var_daq = var_daq(idx);
+        [~, idx] = sort(cellfun(@(x) sscanf(x, 'C4B%d'), var_mri));
+        var_mri = var_mri(idx);
         tvec = []; 
         for n = 1: length(var_resp)
             tvec(n ) = length(eval(var_resp{n}));
@@ -195,7 +246,7 @@ cue_onsets_vec = reshape(cue_onsets_all, [numel(cue_onsets_all), 1]);
 %% save event onsets 
 sessi = 1; 
 sessf = session_count(subjidx); 
-save('labchart/subj_4_events.mat', 'event_onsets', 'cue_onsets', "event_onsets_vec", "event_onsets_all", "cue_onsets_vec", "cue_onsets_all", "sessi", "sessf", 'nframes', "offsets", "goodtrials"); 
+save('labchart/extracted_events/subj_6_events.mat', 'event_onsets', 'cue_onsets', "event_onsets_vec", "event_onsets_all", "cue_onsets_vec", "cue_onsets_all", "sessi", "sessf", 'nframes', "offsets", "goodtrials"); 
 
 %% functions 
 function nframes = getnframes(subjname, datapath, nsess_i, nsess_f)
@@ -223,6 +274,3 @@ for sess = nsess_i:nsess_f
 
 end
 end
-
-
-

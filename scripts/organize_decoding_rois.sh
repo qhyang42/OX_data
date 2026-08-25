@@ -13,6 +13,7 @@ shopt -s nullglob
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 OFC_SOURCE="${ROOT_DIR}/ROIs/OFC_small_MNI152_1mm.nii.gz"
+FULL_OFC_SOURCE="${ROOT_DIR}/ROIs/ofc_full_MNI152_1mm.nii.gz"
 DEFAULT_SUBJECTS=(2 3 4 5 6)
 
 # Active masks are consumed by SPM, which requires uncompressed NIfTI files.
@@ -125,6 +126,7 @@ else
 fi
 
 [[ -f "${OFC_SOURCE}" ]] || fail "Missing small OFC source mask: ${OFC_SOURCE}"
+[[ -f "${FULL_OFC_SOURCE}" ]] || fail "Missing full OFC source mask: ${FULL_OFC_SOURCE}"
 
 # Validate all subject inputs before changing the directory layout.
 for subject in "${subjects[@]}"; do
@@ -242,6 +244,15 @@ PRIMARY_MASKS
     write_manifest_row "${primary_manifest}" "${subject}" primary olfOFC \
         OFC_small_MNI152_1mm 'bilateral small OFC; trilinear resampling; threshold=0.2' "${olf_ofc_file}"
 
+    full_ofc_resampled="${subject_work}/fullOFC_resampled.nii"
+    flirt -in "${FULL_OFC_SOURCE}" -ref "${func_ref}" -applyxfm -init "${std2func_mat}" \
+        -interp trilinear -out "${full_ofc_resampled}"
+    full_ofc_file="${primary_dir}/fullOFC_bilateral_func_thr02.nii"
+    fslmaths "${full_ofc_resampled}" -thr 0.2 -bin "${full_ofc_file}"
+    assert_mask "${full_ofc_file}" "${func_ref}"
+    write_manifest_row "${primary_manifest}" "${subject}" primary fullOFC \
+        ofc_full_MNI152_1mm 'bilateral full OFC; trilinear resampling; threshold=0.2' "${full_ofc_file}"
+
     # Secondary: the remaining conceptual bilateral decoding masks. Amygdala
     # subregion components are represented by the requested nonolfAMG union.
     while IFS='|' read -r output_name source_stem source_name labels; do
@@ -267,9 +278,9 @@ SECONDARY_MASKS
 
     primary_masks=("${primary_dir}"/*_bilateral_func_thr02.nii)
     secondary_masks=("${secondary_dir}"/*_bilateral_func_thr02.nii)
-    (( ${#primary_masks[@]} == 11 )) || fail "Expected 11 primary masks for ${subject}; found ${#primary_masks[@]}"
+    (( ${#primary_masks[@]} == 12 )) || fail "Expected 12 primary masks for ${subject}; found ${#primary_masks[@]}"
     (( ${#secondary_masks[@]} == 6 )) || fail "Expected 6 secondary masks for ${subject}; found ${#secondary_masks[@]}"
-    echo "${subject}: archived old ROIs; wrote 11 primary and 6 secondary bilateral masks"
+    echo "${subject}: archived old ROIs; wrote 12 primary and 6 secondary bilateral masks"
 done
 
 echo "ROI organization completed."

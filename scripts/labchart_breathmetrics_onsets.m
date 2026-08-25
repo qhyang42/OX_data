@@ -5,7 +5,7 @@
 
 scriptFile = mfilename('fullpath');
 projectRoot = fileparts(fileparts(scriptFile));
-labchartDir = fullfile(projectRoot, 'labchart');
+labchartDir = fullfile(projectRoot, 'labchart', 'extracted_events');
 breathmetricsDir = '~/Documents/Projects/breathmetrics/';
 
 % Optionally define subjectNumbersToProcess before running this script to
@@ -28,11 +28,6 @@ eventThreshold = 0.1;
 mriThreshold = 1;
 expectedTTLRises = 23;
 expectedTrials = 10;
-
-% Subject 3 session 1 (concatenated runs 1-10) was acquired with reversed
-% airflow polarity. Flip it so positive flow consistently represents inhale.
-polarityFlipRunsBySubject = struct();
-polarityFlipRunsBySubject.subj3 = 1:10;
 
 rawFiles = dir(fullfile(labchartDir, 'subj*_events_raw.mat'));
 rawFiles = rawFiles(~[rawFiles.isdir]);
@@ -77,7 +72,7 @@ for subjectIndex = 1:numel(rawFiles)
     legacyName = ['subj_', subjectNumber, '_events.mat'];
     outputName = [subjectName, '_events_bm.mat'];
     rawPath = fullfile(rawFile.folder, rawFile.name);
-    legacyPath = fullfile(labchartDir, legacyName);
+    legacyPath = fullfile(labchartDir, 'old_DO_NOT_USE', legacyName);
     outputPath = fullfile(labchartDir, outputName);
 
     if ~isfile(legacyPath)
@@ -101,18 +96,8 @@ for subjectIndex = 1:numel(rawFiles)
     sniffTTLSamples = nan(expectedTrials, nruns);
     matchedInhaleSamples = nan(expectedTrials, nruns);
     matchDeltaSeconds = nan(expectedTrials, nruns);
-    polarityMultipliers = ones(nruns, 1);
-    if isfield(polarityFlipRunsBySubject, subjectName)
-        polarityFlipRuns = polarityFlipRunsBySubject.(subjectName);
-    else
-        polarityFlipRuns = [];
-    end
-    if any(polarityFlipRuns < 1 | polarityFlipRuns > nruns | ...
-            polarityFlipRuns ~= fix(polarityFlipRuns))
-        error('OX_DATA:InvalidPolarityFlipRuns', ...
-            'Invalid polarity-flip run indices configured for %s.', subjectName);
-    end
-    polarityMultipliers(polarityFlipRuns) = -1;
+    [polarityMultipliers, polarityFlipRuns] = ...
+        OX_get_respiration_polarity(str2double(subjectNumber), nruns);
 
     fprintf('\n%s: processing %d runs\n', subjectName, nruns);
     for runIndex = 1:nruns

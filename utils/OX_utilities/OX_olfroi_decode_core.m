@@ -100,7 +100,7 @@ subjname_real = SUBJNAMES{subjidx};
 
 mriroot = resolve_mri_root(opts.MRIRoot);
 mridatapath = fullfile(mriroot, subjname, 'nifti');
-base_outdir = fullfile(mridatapath, 'single_trial_by_category');
+base_outdir = fullfile(mridatapath, 'sniff_single_trial_by_category_physio');
 fit_file = fullfile(base_outdir, 'TYPED_FITHRF_GLMDENOISE_RR.mat');
 gm_mask_file = fullfile(mridatapath, 'coreg', 'gm_mask_thr05_func.nii');
 [roi_selection, roi_dirs] = OX_resolve_decoding_roi_selection( ...
