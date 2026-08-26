@@ -34,6 +34,7 @@ if strlength(string(opts.OutputDir)) == 0
     else
         output_name = sprintf('roi_%s_odor_context_template_loro', roi_selection);
     end
+    output_name = [output_name, '_physio'];
     output_dir = fullfile(mri_root, 'group', output_name);
 else
     output_dir = char(string(opts.OutputDir));
@@ -47,6 +48,7 @@ for subject_idx = 1:n_subjects
     else
         subject_output_name = sprintf('roi_%s_odor_context_template_loro', roi_selection);
     end
+    subject_output_name = [subject_output_name, '_physio'];
     filename = fullfile(mri_root, sprintf('subj_%d', subject_id), 'nifti', ...
         'sniff_single_trial_by_category_physio', subject_output_name, ...
         sprintf('odor_context_template_subj%d_loro_results.mat', subject_id));

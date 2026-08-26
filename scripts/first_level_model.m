@@ -1,248 +1,206 @@
-%% run first level analysis in SPM 
+%% Run the sniff-only first-level SPM model for OX subjects 2-6.
+% Sniff events use BreathMetrics inhale onsets. Each functional run is an
+% independent SPM session with its own motion, respiratory, and bad-volume
+% nuisance regressors. Rest is represented by SPM's implicit baseline.
 
-%% 
-SUBJNAMES = {'240711_fMRI_OX_NWU_AS', ...
-        '240723_fMRI_OX_NWU_LS', ...
-        '240814_fMRI_OX_NWU_JN', ...
-        '240816_fMRI_OX_NWU_RR', ...
-        '241018_fMRI_OX_NWU_BN', ...
-        '250117_fMRI_OX_NWU_VS'}; 
+info = setup_ox;
 
-session_count = [4, 13, 10, 15, 16, 10]; % number of sessions for each subj so far. EDIT as needed. 
+subjects = 2:6;
+TR = 0.76;
+highPassSeconds = 128;
+fweP = 0.001;
 
-TR= 0.76; 
+spm('Defaults', 'fMRI');
+spm_jobman('initcfg');
 
-subjidx = 5; % enter subjidx here 
-subjname = ['subj_', num2str(subjidx)];  
-subjname_real = SUBJNAMES{subjidx}; 
+for subjidx = subjects
+    subject = sprintf('subj_%d', subjidx);
+    niftiDir = fullfile(info.projectRoot, 'MRI', subject, 'nifti');
+    eventFile = fullfile(info.projectRoot, 'labchart', 'extracted_events', ...
+        sprintf('subj%d_events_bm.mat', subjidx));
+    outputDir = fullfile(niftiDir, 'first_level_model_sniff_physio');
 
-% mridir = '/Volumes/ExtremeSSD/OX_DATA/MRI'; 
-mridir = '/Users/qhyang/Desktop/OX_DATA/MRI'; 
+    events = loadBreathMetricsEvents(eventFile, subject);
+    runs = OX_discover_functional_runs(subjidx, ...
+        'ProjectRoot', info.projectRoot, ...
+        'ExpectedRuns', numel(events.nframes));
 
-mridatapath = fullfile(mridir, ['subj_', num2str(subjidx)], 'nifti'); % sn:subject's name
+    matlabbatch = buildFirstLevelBatch(subject, runs, events, niftiDir, ...
+        outputDir, TR, highPassSeconds, fweP);
 
-% evdir = '/Volumes/ExtremeSSD/OX_DATA/labchart'; 
-evdir = '/Users/qhyang/Desktop/OX_DATA/labchart'; 
+    if ~isfolder(outputDir)
+        mkdir(outputDir);
+    end
 
-spmdir = fullfile(mridatapath, 'first_lv_model'); 
-
-if ~exist(spmdir, "dir")
-    mkdir(spmdir);
-end 
-
-%% make multiple regressors -- this only needs to be done for each subjct once 
-R = make_motion_regressor (subjname_real, mridatapath, 1, session_count(subjidx)); 
-%%
-if ~exist(fullfile(mridatapath, 'motion_param'), 'file')
-    save(fullfile(mridatapath, 'motion_param'), "R");
-else 
-    fprintf('motion parameter file already exists!')
+    fprintf('Running sniff-only first-level model for %s (%d runs).\n', ...
+        subject, numel(runs));
+    spm_jobman('run', matlabbatch);
 end
 
 
-%% specify
-% Initialize matlabbatch
-matlabbatch = [];
-
-% Specify the directory to save the first-level model
-matlabbatch{1}.spm.stats.fmri_spec.dir = {spmdir};  % Change to your desired directory
-
-% Specify the timing parameters
-matlabbatch{1}.spm.stats.fmri_spec.timing.units = 'secs';  % 'secs' or 'scans' for onset times
-matlabbatch{1}.spm.stats.fmri_spec.timing.RT = TR;  % Repetition time (TR) in seconds
-matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t = 30;  % Number of slices per volume (for temporal resampling)
-matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0 = 1;  % Reference slice (usually the first slice)
-
-%% Specify the preprocessed functional data (e.g., smoothed and realigned images) -- 4D volume does not work 
-% filename = func_list(subjname_real, mridatapath, 1, session_count(subjidx)); 
-% %%% concatenate 4D files 
-% if ~exist(fullfile(mridatapath, 'func', 'merged_runs.nii'), 'file')
-%     spm_file_merge(filename, fullfile(mridatapath, 'func', 'merged_runs.nii'));
-% end
-
-% %% try merging with fslmerge 
-% [~, filename_fsl] = func_list(subjname_real, mridatapath, 1, session_count(subjidx)); 
-% fsloutput = fullfile(mridatapath, 'func' , 'merged_runs_fsl.nii');
-% fslmerge_command = sprintf('fslmerge -t %s %s', fsloutput, filename_fsl);
-% %% 
-% system(fslmerge_command);
-
-%% specify functional data as 3d images 
-filename = func_lsit_3D(subjname_real, mridatapath, 1, session_count(subjidx)); 
-
 %% 
-% matlabbatch{1}.spm.stats.fmri_spec.sess.scans = {fullfile(mridatapath, 'func', 'merged_runs.nii')};  % List of preprocessed NIfTI files for the run/session
-matlabbatch{1}.spm.stats.fmri_spec.sess.scans = filename; 
-% Specify the conditions (onsets and durations)
-load(fullfile(evdir, [subjname, '_events.mat'])); % all events 
+function events = loadBreathMetricsEvents(eventFile, subject)
+requiredFields = {'event_onsets', 'nframes', 'bm_processing'};
+if ~isfile(eventFile)
+    error('OX:FirstLevel:MissingBreathMetricsEvents', ...
+        'BreathMetrics event file not found for %s: %s', subject, eventFile);
+end
 
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name = 'Odor';  % Name of the condition
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).onset = event_onsets_vec(goodtrials);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration = 2;    % Durations in seconds (or 0 for events)
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod = 0;               % Temporal modulation (0 = none)
+events = load(eventFile, requiredFields{:});
+missingFields = requiredFields(~isfield(events, requiredFields));
+if ~isempty(missingFields)
+    error('OX:FirstLevel:InvalidBreathMetricsEvents', ...
+        '%s is missing required field(s): %s', eventFile, ...
+        strjoin(missingFields, ', '));
+end
 
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name = 'cue';
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset = cue_onsets_vec(goodtrials);    % Onsets in seconds
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration = 5; % use cue word onset as cue event    
-matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod = 0;  
+if ~isnumeric(events.event_onsets) || ~isnumeric(events.nframes) || ...
+        isempty(events.event_onsets) || isempty(events.nframes) || ...
+        any(~isfinite(events.event_onsets(:))) || ...
+        any(~isfinite(events.nframes(:)))
+    error('OX:FirstLevel:InvalidBreathMetricsEvents', ...
+        '%s contains invalid event_onsets or nframes.', eventFile);
+end
 
-matlabbatch{1}.spm.stats.fmri_spec.sess.hpf = 128; 
+events.nframes = events.nframes(:);
+if size(events.event_onsets, 2) ~= numel(events.nframes)
+    error('OX:FirstLevel:EventRunCountMismatch', ...
+        ['%s contains %d event-onset run(s), but nframes contains ', ...
+         '%d run(s).'], eventFile, size(events.event_onsets, 2), ...
+        numel(events.nframes));
+end
+if any(events.nframes <= 0) || any(events.nframes ~= fix(events.nframes))
+    error('OX:FirstLevel:InvalidFrameCounts', ...
+        '%s contains invalid run frame counts.', eventFile);
+end
+end
 
-% regressors 
-matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg = {fullfile(mridatapath, 'motion_param.mat')}; 
+function matlabbatch = buildFirstLevelBatch(subject, runs, events, ...
+        niftiDir, outputDir, TR, highPassSeconds, fweP)
+numberOfRuns = numel(runs);
+if numberOfRuns ~= numel(events.nframes)
+    error('OX:FirstLevel:RunCountMismatch', ...
+        '%s has %d discovered runs but %d event runs.', subject, ...
+        numberOfRuns, numel(events.nframes));
+end
 
-%%  
-matlabbatch{2}.spm.stats.fmri_est.spmmat = {fullfile(spmdir, 'SPM.mat')};
+matlabbatch = cell(1, 4);
+matlabbatch{1}.spm.stats.fmri_spec.dir = {outputDir};
+matlabbatch{1}.spm.stats.fmri_spec.timing.units = 'secs';
+matlabbatch{1}.spm.stats.fmri_spec.timing.RT = TR;
+matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t = 30;
+matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0 = 1;
 
-%% specify
-spm_jobman('run', matlabbatch(1));
-%% add run specific regressors 
-spm_fmri_concatenate(fullfile(spmdir, 'SPM.mat'), nframes');
+for runIndex = 1:numberOfRuns
+    runInfo = runs(runIndex);
+    scanList = cellstr(spm_select('expand', runInfo.functional_file));
+    expectedFrames = events.nframes(runIndex);
+    if numel(scanList) ~= expectedFrames
+        error('OX:FirstLevel:FunctionalFrameMismatch', ...
+            '%s %s has %d functional frames; expected %d.', subject, ...
+            runInfo.id, numel(scanList), expectedFrames);
+    end
 
-%% estimate 
-spm_jobman('run', matlabbatch(2)); 
-%% contrast
-load(fullfile(spmdir, 'SPM.mat'));
+    onsets = events.event_onsets(:, runIndex);
+    runDuration = expectedFrames * TR;
+    if any(onsets < 0) || any(onsets >= runDuration)
+        error('OX:FirstLevel:OnsetOutsideRun', ...
+            '%s %s has a sniff onset outside [0, %.3f) seconds.', ...
+            subject, runInfo.id, runDuration);
+    end
 
-% Specify a t-contrast: Odor > Rest
-matlabbatch{3}.spm.stats.con.spmmat = {fullfile(spmdir, 'SPM.mat')};
+    confoundFile = fullfile(niftiDir, 'glmsingle_confounds', sprintf( ...
+        '%s_session%02d_run%02d_confounds.mat', subject, ...
+        runInfo.session, runInfo.run));
+    [confounds, confoundNames] = loadRunConfounds( ...
+        confoundFile, subject, runInfo, runIndex, expectedFrames);
+
+    session = struct();
+    session.scans = scanList;
+    session.cond.name = 'Odor';
+    session.cond.onset = onsets(:);
+    session.cond.duration = 0;
+    session.cond.tmod = 0;
+    session.cond.pmod = struct('name', {}, 'param', {}, 'poly', {});
+    session.cond.orth = 1;
+    session.multi = {''};
+    session.regress = struct('name', confoundNames, ...
+        'val', num2cell(confounds, 1));
+    session.multi_reg = {''};
+    session.hpf = highPassSeconds;
+    matlabbatch{1}.spm.stats.fmri_spec.sess(runIndex) = session;
+end
+
+matlabbatch{1}.spm.stats.fmri_spec.fact = ...
+    struct('name', {}, 'levels', {});
+matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
+matlabbatch{1}.spm.stats.fmri_spec.volt = 1;
+matlabbatch{1}.spm.stats.fmri_spec.global = 'None';
+matlabbatch{1}.spm.stats.fmri_spec.mthresh = 0.8;
+matlabbatch{1}.spm.stats.fmri_spec.mask = {''};
+matlabbatch{1}.spm.stats.fmri_spec.cvi = 'AR(1)';
+
+spmMat = fullfile(outputDir, 'SPM.mat');
+matlabbatch{2}.spm.stats.fmri_est.spmmat = {spmMat};
+matlabbatch{2}.spm.stats.fmri_est.write_residuals = 0;
+matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
+
+matlabbatch{3}.spm.stats.con.spmmat = {spmMat};
 matlabbatch{3}.spm.stats.con.consess{1}.tcon.name = 'Odor > Rest';
-matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = [1 0];
-matlabbatch{3}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
+matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = 1;
+matlabbatch{3}.spm.stats.con.consess{1}.tcon.sessrep = 'replsc';
+matlabbatch{3}.spm.stats.con.delete = 1;
 
-% Specify another t-contrast: Cue > Rest
-matlabbatch{3}.spm.stats.con.consess{2}.tcon.name = 'Cue > Rest';
-matlabbatch{3}.spm.stats.con.consess{2}.tcon.weights = [0 1];
-matlabbatch{3}.spm.stats.con.consess{2}.tcon.sessrep = 'none';
-
-
-
-%% 
-spm_jobman('run', matlabbatch(3));
-
-%% calculate fwe corrected T threshold 
-df = [SPM.xX.erdf SPM.xX.trRV];  % Error df and residual variance
-
-% Compute FWE-corrected voxel-level threshold
-p_fwe = 0.001;  % Desired FWE-corrected significance level
-STAT = 'T';    % Statistic type ('T' for T-maps)
-R = SPM.xVol.R;  % Resels (spatial smoothness of the data)
-n_voxels = prod(SPM.xVol.DIM);  % Number of voxels
-u = spm_uc(p_fwe, df, STAT, R, 1, n_voxels);  % FWE threshold
-
-save(fullfile(spmdir, 't_thr_fwe001.mat'), 'u');
-%% contrast by category 
-
-%% test register Tmap to standard space 
-% cimages = {fullfile(mridatapath, 'spmT_0001.nii'); ...
-%     fullfile(mridatapath, 'spmT_0002.nii')}; 
-% anatfile = dir(fullfile(mridatapath, 'anat', 'mean*.nii')); 
-% anatfile = anatfile.name; 
-% fname = fullfile(mridatapath, 'anat', sprintf('y_%s', anatfile));
-% matlabbatch{4}.spm.spatial.normalise.write.subj.def = {fname};
-% matlabbatch{4}.spm.spatial.normalise.write.subj.resample = cimages;
-% matlabbatch{4}.spm.spatial.normalise.write.woptions.bb = [-78 -112 -70; 78 76 85];
-% matlabbatch{4}.spm.spatial.normalise.write.woptions.vox = [2 2 2];
-% matlabbatch{4}.spm.spatial.normalise.write.woptions.interp = 4;
-
-%% steps after T contrast 
-% brain extraction using bet2 
-% func to wb to T1 brain coreg 
-% register contrast to T1
-% threshold contrast 
-
-
-
-%% functions 
-%%
-function [filename, filename_fsl] = func_list(subjname, datapath, nsess_i, nsess_f)
-
-%%%%% NOTE. This is now working for 4D nifti volumes. 
-
-% rnctr is run counter
-rcntr = 0;
-filename = [];
-filename_fsl = []; 
-
-for sess = nsess_i:nsess_f
-
-    path_ = fullfile(datapath, 'func/');
-    n = dir(fullfile(path_, [subjname, '_', num2str(sess), '*.nii']));
-    nfiles = length(n); 
-
-    %     if rcntr==1
-    %         funcpath = path_;
-    %         funcfile = n(1).name;
-    %     end
-
-    for i=1:length(n)
-        rcntr = rcntr+1; % sess_2_run_1 is counted as 5 if sess_1 had 4 runs
-        thisfile = dir(fullfile(path_, ['sr', subjname, '_', num2str(sess), '_Run', num2str(i), '_*.nii']));
-        fname = fullfile(path_, thisfile.name);
-        % Different runs in different cells, add ",1" for spm
-%         filename{rcntr}{i,1} = sprintf('%s,1', fname);
-%         filename{rcntr, 1}{1,1} = sprintf('%s', fname);
-        filename{rcntr, 1} = sprintf('%s', fname);
-
-        filename_fsl = [filename_fsl, ' ', fname]; 
-    end
-
+matlabbatch{4}.spm.stats.results.spmmat = {spmMat};
+matlabbatch{4}.spm.stats.results.conspec.titlestr = 'Odor > Rest';
+matlabbatch{4}.spm.stats.results.conspec.contrasts = 1;
+matlabbatch{4}.spm.stats.results.conspec.threshdesc = 'FWE';
+matlabbatch{4}.spm.stats.results.conspec.thresh = fweP;
+matlabbatch{4}.spm.stats.results.conspec.extent = 0;
+matlabbatch{4}.spm.stats.results.conspec.conjunction = 1;
+matlabbatch{4}.spm.stats.results.conspec.mask.none = 1;
+matlabbatch{4}.spm.stats.results.units = 1;
+matlabbatch{4}.spm.stats.results.export{1}.tspm.basename = 'FWE_p001';
 end
 
-
+function [confounds, names] = loadRunConfounds(confoundFile, subject, ...
+        runInfo, runIndex, expectedFrames)
+requiredFields = {'confounds', 'confound_names', 'nframes', ...
+    'run_ordinal', 'session_id', 'run_id'};
+if ~isfile(confoundFile)
+    error('OX:FirstLevel:MissingConfounds', ...
+        'Confound file not found for %s %s: %s', ...
+        subject, runInfo.id, confoundFile);
 end
 
-%% 
-function filename = func_lsit_3D(subjname, datapath, nsess_i, nsess_f)
-%%% list all functional volumes in one cell array 
-
-vcntr = 0; % run counter
-filename = [];
-
-for sess = nsess_i:nsess_f
-    % sess_2_run_1 is counted as 5 if sess_1 had 4 runs
-    path_ = fullfile(datapath, 'func/');
-    n = dir(fullfile(path_, ['sr', subjname, '_', num2str(sess), '_*.nii']));
-    nfiles = length(n);
-
-    for i=1:nfiles
-
-        thisfile = dir(fullfile(path_, ['sr', subjname, '_', num2str(sess), '_Run', num2str(i), '_*.nii']));
-        fname = fullfile(path_, thisfile.name);
-
-        nifti_header = niftiinfo(fname);
-        nvols = nifti_header.ImageSize(4);
-
-        for vol = 1:nvols
-            vcntr = vcntr+1;
-            % list all volumes in a cell array 
-            filename{vcntr, 1} = sprintf('%s,%d', fname, vol);
-        end
-    end
-
-end
+data = load(confoundFile, requiredFields{:});
+missingFields = requiredFields(~isfield(data, requiredFields));
+if ~isempty(missingFields)
+    error('OX:FirstLevel:InvalidConfounds', ...
+        '%s is missing required field(s): %s', confoundFile, ...
+        strjoin(missingFields, ', '));
 end
 
-%%
-function R = make_motion_regressor (subjname, datapath, nsess_i, nsess_f)
-%%% make motion regressors
-motion_regressor = [];
-path_ = fullfile(datapath, 'func/');
-
-for sess = nsess_i:nsess_f
-
-%     path_ = fullfile(datapath, 'func/');
-    n = dir(fullfile(path_, [subjname, '_', num2str(sess), '_*.nii']));
-    nfiles = length(n);
-
-    for i = 1:nfiles
-        mpfile = dir(fullfile(path_, ['rp_', subjname, '_', num2str(sess), '_Run', num2str(i), '_*.txt']));
-        mp = load(fullfile(path_, mpfile.name));
-        current_reg = [mp, [zeros(1,6); diff(mp)], mp.^2, [zeros(1,6); diff(mp).^2]];
-        motion_regressor = [motion_regressor; current_reg];
-    end
+confounds = data.confounds;
+names = data.confound_names;
+if ~isnumeric(confounds) || size(confounds, 1) ~= expectedFrames || ...
+        any(~isfinite(confounds(:)))
+    error('OX:FirstLevel:ConfoundFrameMismatch', ...
+        '%s must contain a finite %d-by-N confound matrix.', ...
+        confoundFile, expectedFrames);
 end
-R = motion_regressor; 
+if ~iscell(names) || numel(names) ~= size(confounds, 2) || ...
+        ~all(cellfun(@(name) ischar(name) || ...
+        (isstring(name) && isscalar(name)), names))
+    error('OX:FirstLevel:InvalidConfoundNames', ...
+        '%s has invalid or mismatched confound_names.', confoundFile);
 end
 
-
+names = cellfun(@char, names(:)', 'UniformOutput', false);
+if data.nframes ~= expectedFrames || data.run_ordinal ~= runIndex || ...
+        data.session_id ~= runInfo.session || data.run_id ~= runInfo.run
+    error('OX:FirstLevel:ConfoundRunMismatch', ...
+        '%s metadata does not match %s %s.', ...
+        confoundFile, subject, runInfo.id);
+end
+end

@@ -1,7 +1,7 @@
-function results = OX_roi_decode_core(subjidx, target, varargin)
+function results = OX_roi_decode_core(subjidx, target, beta_type, varargin)
 %OX_ROI_DECODE_CORE ROI-based context or odor decoding for the OX project.
 %
-%   results = OX_roi_decode_core(subjidx, target, Name, Value, ...)
+%   results = OX_roi_decode_core(subjidx, target, beta_type, Name, Value, ...)
 %
 % The function discovers ROI masks from the selected coreg/roi_decoding
 % set, maps them to GLMsingle rows through the functional gray-matter mask,
@@ -11,6 +11,7 @@ function results = OX_roi_decode_core(subjidx, target, varargin)
 % Required inputs:
 %   subjidx                 Numeric subject index.
 %   target                  'context' or 'odor'.
+%   beta_type               'sniff', 'countdown', or 'cue'.
 %
 % Important name-value options:
 %   'Decoder'               'template' (default), 'score', or 'svm'.
@@ -23,8 +24,8 @@ function results = OX_roi_decode_core(subjidx, target, varargin)
 %                           directory override.
 %   'NumRuns'               Number of runs used to infer labels (80).
 %   'RunLabels'             Exact trial-wise run labels; preferred.
-%   'R2Threshold'           GLMsingle R2 cutoff (0.5).
-%   'RestrictFeaturesToR2' Apply R2 cutoff to ROI features (true).
+%   'R2Threshold'           Retained for call compatibility; not used.
+%   'RestrictFeaturesToR2' Retained for call compatibility; not used.
 %   'MinVoxels'             Minimum usable features per ROI (10).
 %   'MaxROIs'               Deterministic smoke-test subset (Inf).
 %   'NumPermutations'       Within-run label permutations (1000).
@@ -52,6 +53,10 @@ p = inputParser;
 p.FunctionName = mfilename;
 addRequired(p, 'subjidx', @(x) isnumeric(x) && isscalar(x) && isfinite(x) && x == round(x));
 addRequired(p, 'target', @(x) any(strcmpi(string(x), ["context", "odor"])));
+addRequired(p, 'beta_type', @(x) ...
+    (ischar(x) || (isstring(x) && isscalar(x))) && ...
+    isscalar(string(x)) && any(strcmpi(string(x), ...
+    ["sniff", "countdown", "cue"])));
 addParameter(p, 'Decoder', 'template', @(x) ischar(x) || (isstring(x) && isscalar(x)));
 addParameter(p, 'CrossValidation', 'leave-one-run-out', @(x) ischar(x) || (isstring(x) && isscalar(x)));
 addParameter(p, 'MRIRoot', '', @(x) ischar(x) || isstring(x));
@@ -72,10 +77,11 @@ addParameter(p, 'ScaleVoxels', true, @(x) islogical(x) && isscalar(x));
 addParameter(p, 'SVMBoxConstraint', 1, @(x) isnumeric(x) && isscalar(x) && isfinite(x) && x > 0);
 addParameter(p, 'OutputDir', '', @(x) ischar(x) || isstring(x));
 addParameter(p, 'SaveOutputs', true, @(x) islogical(x) && isscalar(x));
-parse(p, subjidx, target, varargin{:});
+parse(p, subjidx, target, beta_type, varargin{:});
 opts = p.Results;
 
 target = lower(char(string(target)));
+beta_type = lower(char(string(beta_type)));
 roi_selection = OX_normalize_decoding_roi_selection(opts.ROISelection);
 [decoder, metric_name, metric_null] = normalize_decoder(opts.Decoder);
 [cv_method, cv_short_name] = normalize_cv_method(opts.CrossValidation);
@@ -100,26 +106,29 @@ mriroot = resolve_mri_root(opts.MRIRoot);
 mridatapath = fullfile(mriroot, subjname, 'nifti');
 [roi_selection, roi_dirs] = OX_resolve_decoding_roi_selection( ...
     mridatapath, roi_selection, opts.ROIDir);
-% base_outdir = fullfile(mridatapath, 'sniff_single_trial_by_category_physio'); % for
-% sniff aligned beta
-base_outdir = fullfile(mridatapath, 'countdown_single_trial_by_category_physio'); % for countdown aligned beta.
-
+base_outdir = fullfile(mridatapath, ...
+    sprintf('%s_single_trial_by_category_physio', beta_type));
 fit_file = fullfile(base_outdir, 'TYPED_FITHRF_GLMDENOISE_RR.mat');
 gm_mask_file = fullfile(mridatapath, 'coreg', 'gm_mask_thr05_func.nii');
+functional_mask_file = fullfile(mridatapath, ...
+    'first_level_model_sniff_physio', 'spmT_0001_FWE_p001.nii');
 
-assert(isfile(fit_file), 'Missing GLMsingle file: %s', fit_file);
+assert(isfolder(base_outdir), ...
+    'Missing %s GLMsingle estimate directory: %s', beta_type, base_outdir);
+assert(isfile(fit_file), ...
+    'Missing %s GLMsingle estimate: %s', beta_type, fit_file);
 assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
+assert(isfile(functional_mask_file), ...
+    'Missing functional restriction mask: %s', functional_mask_file);
 if strcmp(decoder, 'svm')
     assert(exist('fitcecoc', 'file') == 2 && exist('templateSVM', 'file') == 2, ...
         'SVM decoding requires Statistics and Machine Learning Toolbox.');
 end
 
 fprintf('\n[%s | %s | %s] Loading %s\n', upper(target), upper(decoder), upper(cv_short_name), fit_file);
-S = load(fit_file, 'modelmd', 'R2');
-assert(isfield(S, 'modelmd') && isfield(S, 'R2'), ...
-    'GLMsingle file must contain modelmd and R2.');
+S = load(fit_file, 'modelmd');
+assert(isfield(S, 'modelmd'), 'GLMsingle file must contain modelmd.');
 modelmd = squeeze(S.modelmd);
-R2 = S.R2(:);
 clear S
 
 [odor_raw, category_raw] = OX_get_odor(subjname);
@@ -134,8 +143,6 @@ end
 assert(ismatrix(modelmd), 'squeeze(modelmd) must produce a 2-D matrix.');
 assert(size(modelmd, 2) == nTrials, ...
     'modelmd has %d columns but labels contain %d trials.', size(modelmd, 2), nTrials);
-assert(numel(R2) == size(modelmd, 1), ...
-    'R2 has %d elements but modelmd has %d voxel rows.', numel(R2), size(modelmd, 1));
 
 run_ids = make_run_ids(nTrials, opts.NumRuns, opts.RunLabels);
 unique_runs = unique(run_ids, 'stable');
@@ -175,6 +182,11 @@ end
 %% Load gray-matter mask and ROI feature sets
 gm_header = spm_vol(gm_mask_file);
 gm_mask = spm_read_vols(gm_header) > 0;
+functional_header = spm_vol(functional_mask_file);
+assert_same_geometry(functional_header, gm_header, ...
+    functional_mask_file, gm_mask_file);
+functional_mask = spm_read_vols(functional_header) > 0;
+restriction_mask = gm_mask & functional_mask;
 gm_inds = find(gm_mask);
 assert(size(modelmd, 1) == numel(gm_inds), ...
     ['Mapping check failed: modelmd has %d rows but find(gm_mask) has %d voxels. ' ...
@@ -204,13 +216,10 @@ for roi_idx = 1:nROIs
     roi_mask = spm_read_vols(roi_header) > 0;
     n_mask_voxels(roi_idx) = nnz(roi_mask);
 
-    overlap_linear = find(roi_mask & gm_mask);
-    n_gm_overlap(roi_idx) = numel(overlap_linear);
+    n_gm_overlap(roi_idx) = nnz(roi_mask & gm_mask);
+    overlap_linear = find(roi_mask & restriction_mask);
     feature_idx = double(model_index_volume(overlap_linear));
     feature_idx = feature_idx(feature_idx > 0);
-    if opts.RestrictFeaturesToR2
-        feature_idx = feature_idx(isfinite(R2(feature_idx)) & R2(feature_idx) > opts.R2Threshold);
-    end
     if ~isempty(feature_idx)
         feature_idx = feature_idx(all(isfinite(modelmd(feature_idx, :)), 2));
     end
@@ -221,9 +230,7 @@ for roi_idx = 1:nROIs
     [roi_sources(roi_idx), roi_hemispheres(roi_idx), roi_labels(roi_idx)] = ...
         lookup_manifest_metadata(manifest, roi_stems{roi_idx}, roi_names(roi_idx));
 
-    if n_gm_overlap(roi_idx) < opts.MinVoxels
-        status(roi_idx) = "insufficient_gm_overlap";
-    elseif n_features_used(roi_idx) < opts.MinVoxels
+    if n_features_used(roi_idx) < opts.MinVoxels
         status(roi_idx) = "insufficient_features";
     end
 end
@@ -392,6 +399,7 @@ if strlength(string(opts.OutputDir)) == 0
         output_name = sprintf('roi_decoding_%s_%s_%s_%s', ...
             roi_selection, target, decoder, cv_short_name);
     end
+    output_name = [beta_type, '_', output_name, '_physio'];
     output_dir = fullfile(base_outdir, output_name);
 else
     output_dir = char(string(opts.OutputDir));
@@ -408,8 +416,8 @@ results.preprocessing = struct( ...
     'within_run_voxel_centering', true, ...
     'demean_patterns', opts.DemeanPatterns, ...
     'scale_voxels_with_training_fold_only', opts.ScaleVoxels, ...
-    'restrict_features_to_r2', opts.RestrictFeaturesToR2, ...
-    'r2_threshold', opts.R2Threshold, ...
+    'restrict_features_to_r2', false, ...
+    'r2_threshold', NaN, ...
     'mapping_assertion', 'modelmd row i == find(gm_mask)(i)');
 results.roi_metadata = summary(:, 1:9);
 results.summary = summary;

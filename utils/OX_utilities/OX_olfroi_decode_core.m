@@ -103,10 +103,14 @@ mridatapath = fullfile(mriroot, subjname, 'nifti');
 base_outdir = fullfile(mridatapath, 'sniff_single_trial_by_category_physio');
 fit_file = fullfile(base_outdir, 'TYPED_FITHRF_GLMDENOISE_RR.mat');
 gm_mask_file = fullfile(mridatapath, 'coreg', 'gm_mask_thr05_func.nii');
+functional_mask_file = fullfile(mridatapath, ...
+    'first_level_model_sniff_physio', 'spmT_0001_FWE_p001.nii');
 [roi_selection, roi_dirs] = OX_resolve_decoding_roi_selection( ...
     mridatapath, opts.ROISelection, '');
 assert(isfile(fit_file), 'Missing GLMsingle file: %s', fit_file);
 assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
+assert(isfile(functional_mask_file), ...
+    'Missing functional restriction mask: %s', functional_mask_file);
 assert(exist('fitcecoc', 'file') == 2 && exist('templateSVM', 'file') == 2, ...
     'Nested SVM decoding requires Statistics and Machine Learning Toolbox.');
 assert(exist('fitcdiscr', 'file') == 2, ...
@@ -148,6 +152,10 @@ print_class_counts(y, class_values);
 %% Load focused ROI feature sets
 gm_header = spm_vol(gm_mask_file);
 gm_mask = spm_read_vols(gm_header) > 0;
+functional_header = spm_vol(functional_mask_file);
+assert_same_geometry(functional_header, gm_header, functional_mask_file);
+functional_mask = spm_read_vols(functional_header) > 0;
+restriction_mask = gm_mask & functional_mask;
 gm_inds = find(gm_mask);
 assert(size(modelmd, 1) == numel(gm_inds), ...
     ['Mapping check failed: modelmd has %d rows but find(gm_mask) has %d voxels. ' ...
@@ -174,8 +182,8 @@ status = repmat("ok", nROIs, 1);
 for ri = 1:nROIs
     roi_mask = build_roi_mask(roi_defs.component_keys{ri}, component_masks);
     n_mask_voxels(ri) = nnz(roi_mask);
-    overlap_linear = find(roi_mask & gm_mask);
-    n_gm_overlap(ri) = numel(overlap_linear);
+    n_gm_overlap(ri) = nnz(roi_mask & gm_mask);
+    overlap_linear = find(roi_mask & restriction_mask);
     if n_mask_voxels(ri) > 0
         gm_overlap_fraction(ri) = n_gm_overlap(ri) / n_mask_voxels(ri);
     end
@@ -189,9 +197,7 @@ for ri = 1:nROIs
     feature_idx = unique(feature_idx(:)', 'stable');
     roi_features{ri} = feature_idx;
     n_features_used(ri) = numel(feature_idx);
-    if n_gm_overlap(ri) < opts.MinVoxels
-        status(ri) = "insufficient_gm_overlap";
-    elseif n_features_used(ri) < opts.MinVoxels
+    if n_features_used(ri) < opts.MinVoxels
         status(ri) = "insufficient_finite_features";
     end
 end
@@ -376,6 +382,7 @@ if strlength(string(opts.OutputDir)) == 0
         output_name = sprintf('olfroi_decoding_%s_%s_nested_kfold%d', ...
             roi_selection, target, opts.NumOuterFolds);
     end
+    output_name = [output_name, '_physio'];
     output_dir = fullfile(base_outdir, output_name);
 else
     output_dir = char(string(opts.OutputDir));

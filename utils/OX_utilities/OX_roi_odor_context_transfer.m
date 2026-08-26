@@ -46,10 +46,14 @@ nifti_dir = fullfile(mri_root, subject_name, 'nifti');
 beta_dir = fullfile(nifti_dir, 'sniff_single_trial_by_category_physio');
 fit_file = fullfile(beta_dir, 'TYPED_FITHRF_GLMDENOISE_RR.mat');
 gm_mask_file = fullfile(nifti_dir, 'coreg', 'gm_mask_thr05_func.nii');
+functional_mask_file = fullfile(nifti_dir, ...
+    'first_level_model_sniff_physio', 'spmT_0001_FWE_p001.nii');
 [roi_selection, roi_dirs] = OX_resolve_decoding_roi_selection( ...
     nifti_dir, opts.ROISelection, opts.ROIDir);
 assert(isfile(fit_file), 'Missing odor-aligned GLMsingle file: %s', fit_file);
 assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
+assert(isfile(functional_mask_file), ...
+    'Missing functional restriction mask: %s', functional_mask_file);
 assert(exist('spm_vol', 'file') == 2 && exist('spm_read_vols', 'file') == 2, ...
     'SPM must be on the MATLAB path. Run setup_ox first.');
 
@@ -86,6 +90,11 @@ fprintf('ROI selection: %s | Directories: %s\n', ...
 
 gm_header = spm_vol(gm_mask_file);
 gm_mask = spm_read_vols(gm_header) > 0;
+functional_header = spm_vol(functional_mask_file);
+assert_same_geometry(functional_header, gm_header, ...
+    functional_mask_file, gm_mask_file);
+functional_mask = spm_read_vols(functional_header) > 0;
+restriction_mask = gm_mask & functional_mask;
 gm_indices = find(gm_mask);
 assert(size(modelmd, 1) == numel(gm_indices), ...
     'modelmd rows (%d) do not match gray-matter voxels (%d).', ...
@@ -111,8 +120,8 @@ for roi_idx = 1:n_rois
     assert_same_geometry(roi_header, gm_header, roi_files{roi_idx}, gm_mask_file);
     roi_mask = spm_read_vols(roi_header) > 0;
     n_mask_voxels(roi_idx) = nnz(roi_mask);
-    overlap = find(roi_mask & gm_mask);
-    n_gm_overlap(roi_idx) = numel(overlap);
+    n_gm_overlap(roi_idx) = nnz(roi_mask & gm_mask);
+    overlap = find(roi_mask & restriction_mask);
     feature_indices = double(model_index_volume(overlap));
     feature_indices = feature_indices(feature_indices > 0);
     if ~isempty(feature_indices)
@@ -123,9 +132,7 @@ for roi_idx = 1:n_rois
     roi_names(roi_idx) = erase(string(roi_stems{roi_idx}), "_func_thr02");
     [roi_sources(roi_idx), roi_labels(roi_idx)] = ...
         manifest_metadata(manifest, roi_stems{roi_idx});
-    if n_gm_overlap(roi_idx) < opts.MinVoxels
-        status(roi_idx) = "insufficient_gm_overlap";
-    elseif n_features(roi_idx) < opts.MinVoxels
+    if n_features(roi_idx) < opts.MinVoxels
         status(roi_idx) = "insufficient_features";
     end
 end
@@ -246,6 +253,7 @@ if strlength(string(opts.OutputDir)) == 0
     else
         output_name = sprintf('roi_%s_odor_context_template_loro', roi_selection);
     end
+    output_name = [output_name, '_physio'];
     output_dir = fullfile(beta_dir, output_name);
 else
     output_dir = char(string(opts.OutputDir));
