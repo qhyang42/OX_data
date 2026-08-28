@@ -12,6 +12,7 @@ shopt -s nullglob
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+BN_ATLAS_SOURCE="${ROOT_DIR}/ROIs/BN_Atlas_246_1mm.nii.gz"
 OFC_SOURCE="${ROOT_DIR}/ROIs/OFC_small_MNI152_1mm.nii.gz"
 FULL_OFC_SOURCE="${ROOT_DIR}/ROIs/ofc_full_MNI152_1mm.nii.gz"
 DEFAULT_SUBJECTS=(2 3 4 5 6)
@@ -125,6 +126,7 @@ else
     done
 fi
 
+[[ -f "${BN_ATLAS_SOURCE}" ]] || fail "Missing Brainnetome atlas: ${BN_ATLAS_SOURCE}"
 [[ -f "${OFC_SOURCE}" ]] || fail "Missing small OFC source mask: ${OFC_SOURCE}"
 [[ -f "${FULL_OFC_SOURCE}" ]] || fail "Missing full OFC source mask: ${FULL_OFC_SOURCE}"
 
@@ -177,6 +179,10 @@ done
 
 WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ox_roi_groups.XXXXXX")"
 trap 'rm -rf "${WORK_ROOT}"' EXIT
+EC_STANDARD_SOURCE="${WORK_ROOT}/EC_Brainnetome_MNI_1mm.nii"
+# Brainnetome A28/34 (atlas values 115 and 116) is the bilateral
+# entorhinal-cortex parcel.
+fslmaths "${BN_ATLAS_SOURCE}" -thr 115 -uthr 116 -bin "${EC_STANDARD_SOURCE}"
 
 for subject in "${subjects[@]}"; do
     [[ "${subject}" == subj_* ]] || subject="$(normalise_subject_id "${subject}")"
@@ -236,6 +242,16 @@ PRIMARY_MASKS
     ofc_resampled="${subject_work}/olfOFC_resampled.nii"
     convert_xfm -omat "${std2wb_mat}" -concat "${coreg_dir}/T12wbmat" "${coreg_dir}/std2T1mat"
     convert_xfm -omat "${std2func_mat}" -concat "${coreg_dir}/wb2funcmat" "${std2wb_mat}"
+
+    ec_resampled="${subject_work}/EC_resampled.nii"
+    flirt -in "${EC_STANDARD_SOURCE}" -ref "${func_ref}" -applyxfm -init "${std2func_mat}" \
+        -interp trilinear -out "${ec_resampled}"
+    ec_file="${primary_dir}/EC_bilateral_func_thr02.nii"
+    fslmaths "${ec_resampled}" -thr 0.2 -bin "${ec_file}"
+    assert_mask "${ec_file}" "${func_ref}"
+    write_manifest_row "${primary_manifest}" "${subject}" primary EC \
+        Brainnetome 'L:115;R:116 (A28/34; trilinear resampling; threshold=0.2)' "${ec_file}"
+
     flirt -in "${OFC_SOURCE}" -ref "${func_ref}" -applyxfm -init "${std2func_mat}" \
         -interp trilinear -out "${ofc_resampled}"
     olf_ofc_file="${primary_dir}/olfOFC_bilateral_func_thr02.nii"
@@ -278,9 +294,9 @@ SECONDARY_MASKS
 
     primary_masks=("${primary_dir}"/*_bilateral_func_thr02.nii)
     secondary_masks=("${secondary_dir}"/*_bilateral_func_thr02.nii)
-    (( ${#primary_masks[@]} == 12 )) || fail "Expected 12 primary masks for ${subject}; found ${#primary_masks[@]}"
+    (( ${#primary_masks[@]} == 13 )) || fail "Expected 13 primary masks for ${subject}; found ${#primary_masks[@]}"
     (( ${#secondary_masks[@]} == 6 )) || fail "Expected 6 secondary masks for ${subject}; found ${#secondary_masks[@]}"
-    echo "${subject}: archived old ROIs; wrote 12 primary and 6 secondary bilateral masks"
+    echo "${subject}: archived old ROIs; wrote 13 primary and 6 secondary bilateral masks"
 done
 
 echo "ROI organization completed."
