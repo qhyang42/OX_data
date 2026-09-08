@@ -147,6 +147,7 @@ ROI registration uses the subject transform chain `standard -> T1 -> whole brain
 
 ## General multivariate-analysis conventions
 
+- When applicable, use simple neural distance (Pearson correlation distance, `1 - r`) and linear model fits for RSA and related analyses. Do not rank-transform RDMs.
 - Use subjects 2-6 unless the scientific question and documentation explicitly redefine the sample.
 - Use physiology-regressed GLMsingle estimates for new work.
 - Use exact acquisition run IDs as grouping variables. Do not infer folds from trial ordinal alone.
@@ -159,6 +160,7 @@ ROI registration uses the subject transform chain `standard -> T1 -> whole brain
 - Current multivariate analyses center each voxel's GLMsingle betas within run. For semantic-only similarity, the centering mean is computed from semantic trials only so `CONTROL` does not enter the analysis indirectly. Record this as transductive within-run normalization when describing the method.
 - Require at least 10 usable voxels/features. Mark smaller ROIs or neighborhoods as insufficient rather than silently changing the threshold.
 - With only five participants, group inference is exploratory. Exact sign-flip tests have only 32 sign patterns, so participant-level effects and plots must remain prominent.
+- For new coefficient-based inference, generate within-subject permutation nulls and individual statistics. Construct each group null draw by averaging one null beta from each of the five subjects with equal weights, and compare the observed mean beta against that aggregated distribution. Avoid conventional one-sample group t-tests. This supports inference for the measured subjects, not population random-effects inference.
 - Production permutation tests use add-one empirical p-values: `(1 + exceedances) / (N permutations + 1)`. State whether multiplicity is controlled by FDR or a maximum statistic and define the full testing family.
 - Keep smoke tests visibly separate from production results. Typical smoke-test settings are two ROIs/centers, two permutations, and serial execution.
 
@@ -198,6 +200,16 @@ ROI registration uses the subject transform chain `standard -> T1 -> whole brain
 - The clearest current group-level pattern is stable context-specific representation in `olfOFC`; the group mean effect is also positive in the other four focused ROIs, with more participant and context variability. These are permutation summaries, not a license to treat repeated splits as independent observations.
 - Results are in `MRI/group/context_split_half_similarity_physio/`.
 
+### Formal omnibus and rating-displacement RSA
+
+- Entry points are `scripts/run_omnibus_rsa.m` and `scripts/run_rating_displacement_rsa.m`; shared implementation is in `utils/OX_utilities/`. Both reuse saved neural and behavioral RDMs for subjects 2–6 and the five olfactory ROIs, including all four contexts, with simple neural distance and linear fits.
+- Omnibus RSA includes odor identity, context identity, pleasantness distance, and intensity distance. Categorical predictors remain similarity-coded (`1 = same`), so negative categorical betas indicate smaller neural distances for same-identity pairs after adjustment.
+- The primary displacement coefficient model includes both rating changes plus context-pair and odor fixed effects. The context-pair-only adjustment model is retained as sensitivity.
+- These analyses use 5,000 global neural condition-correspondence permutations per subject, applying one random bijection to both RDM axes, shared across ROIs and analyses and independent across subjects. Predictors remain fixed and models are refitted. This explicit RDM-level null assumes exchangeable neural condition identities under global no association; it is not a coefficient-specific conditional null or the within-run trial-label permutation used for decoding and split-half similarity.
+- Report two-sided inclusive empirical p-values with add-one correction and BH-FDR q-values across ROI × scientific predictors, separately by subject/group and by model (20 omnibus tests; 10 tests per displacement model). Scientific coefficients receive permutation inference; nuisance coefficients are saved descriptively.
+- Displacement scatterplots use separate univariate REML mixed models per ROI, rating, and focal semantic context (PERSON, FOOD, LOCATION). Pool the three pairs involving the focal context, including CONTROL, for 300 observations per model. Estimate one common rating slope with pair-specific fixed intercepts, an uncorrelated subject random intercept/slope, and odor and subject–odor random intercepts. Slope tests and pointwise confidence intervals use Satterthwaite degrees of freedom; FDR covers all 30 slopes. These overlapping context subsets test rating-displacement association within each pool, not a contrast against excluded-pair slopes. Display population lines equally averaging the three pair intercepts. These models have no permutation group test and do not adjust for the other rating. Preserve and report convergence and covariance-boundary diagnostics. Use `scripts/run_rating_displacement_mixed_models.m` to update only these models from saved results.
+- Outputs are in `RDMs/omnibus_RSA/` and `RDMs/rating_displacement_RSA/`, each with subject results, tables, figures, combined MAT results, and a methods README. The original exploratory outputs remain in `RDMs/exploratory_RSA_results/`.
+
 ### Restricted olfactory-network searchlight
 
 - Participant-level searchlights are complete for subjects 2-6 using the seven-mask extended support set, sniff-aligned physiology-regressed betas, semantic trials only, 4-mm physical spheres, at least 10 restricted voxels, 200 session-balanced splits, and 5,000 within-run permutations.
@@ -213,6 +225,8 @@ MRI/group/roi_decoding_inventory/
 MRI/group/context_split_half_similarity_physio/
 MRI/group/roi_odor_context_template_loro/
 MRI/group/roi_cross_odor_context_template_loro/
+RDMs/omnibus_RSA/
+RDMs/rating_displacement_RSA/
 ```
 
 Large MRI and derivative files are intentionally ignored by Git. Analysis code and documentation are versioned; the existence of a local derivative should not be inferred from Git history alone.

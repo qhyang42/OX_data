@@ -1,111 +1,103 @@
-%%% subj_1: AS 
-%%% subj_2: LS 
-%%% subj_3: JN 
-
-
-%% 
-wkdir =     '/Users/qhyang/Desktop/OX_DATA/behavior'; 
-subjname = 'subj_6';
-cuelistdir = '/Users/qhyang/Desktop/OX_DATA/cuelist'; 
-% sesidx = 1; 
-% runidx = 1; 
+%% Paths and acquisition layout
+wkdir = '/Users/qhyang/Desktop/OX_DATA/behavior';
+cuelistdir = '/Users/qhyang/Desktop/OX_DATA/cuelist';
+SUBJNAMES = {'subj_2', 'subj_3', 'subj_4', 'subj_5', 'subj_6'};
+SESSION_RUN_COUNTS = { ...
+    [10, 10, 10, 5, 5, 3, 5, 5, 5, 6, 5, 6, 5], ... % subj_2
+    [10, 8, 8, 8, 8, 6, 8, 8, 7, 9], ...             % subj_3
+    [8, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5], ... % subj_4
+    [5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 6, 5, 5], ... % subj_5
+    [8, 8, 8, 8, 8, 6, 8, 9, 9, 8]};                 % subj_6
 odorlabels = {'anise', 'brownie', 'orange', '1-nonanol', 'chicken', 'rose', 'dish soap', 'coffee', 'coconut', 'benzaldehyde', ...
     'Air', 'Ethylbenzene', 'banana', 'Whiskey', 'Diethylpyrazine', 'Garlic', 'Methyl salicylate', 'Tea tree', 'Parmesan', 'Salsa'}; 
 c = 756; % this is the screen center and default x position 
 
-%% read behavior data  
-valence_all = []; 
-intensity_all = []; 
-nruns = 0; 
+%% Extract and save behavior data for subjects 2-6
+for sidx = 1:length(SUBJNAMES)
+    subjname = SUBJNAMES{sidx};
+    run_counts = SESSION_RUN_COUNTS{sidx};
+    valence_all = [];
+    intensity_all = [];
+    odor = [];
+    category = {};
+    nruns = 0;
 
-for sesidx = 1: 16
-    for runidx = 1:10
-        try
-            load(fullfile(wkdir, subjname, [subjname, '_session', num2str(sesidx), '_run', num2str(runidx), '_results.mat']));
-            fprintf('load session %d run %d.   \n', sesidx, runidx); 
-            nruns = nruns+1; 
-        catch
-            continue
-        end
-        varlist = who();
-        valence = [];
-        intensity = [];
+    for sesidx = 1:length(run_counts)
+        for runidx = 1:run_counts(sesidx)
+            result_file = fullfile(wkdir, subjname, ...
+                [subjname, '_session', num2str(sesidx), '_run', num2str(runidx), '_results.mat']);
+            run_data = load(result_file);
+            nruns = nruns + 1;
 
-        if sum(ismember(varlist, 'datalabel'))>0
-            % read cell 2 and 3 as valence and intensity rating
-            for n = 1: length(outMat)
-                if isempty(outMat{n}{2})
-                    valence(n) = c;
-                else
-                    valence(n) = outMat{n}{2};
+            valence = [];
+            intensity = [];
+
+            if isfield(run_data, 'datalabel')
+                % read cell 2 and 3 as valence and intensity rating
+                for n = 1:length(run_data.outMat)
+                    if isempty(run_data.outMat{n}{2})
+                        valence(n) = NaN;
+                    else
+                        valence(n) = run_data.outMat{n}{2};
+                    end
+                    if isempty(run_data.outMat{n}{3})
+                        intensity(n) = NaN;
+                    else
+                        intensity(n) = run_data.outMat{n}{3};
+                    end
                 end
-                if isempty(outMat{n}{3})
-                    intensity(n) = c;
-                else
-                    intensity(n) = outMat{n}{3};
+
+            else
+                % read 4 and 5
+                for n = 1:length(run_data.outMat)
+                    if isempty(run_data.outMat{n}{4})
+                        valence(n) = NaN;
+                    else
+                        valence(n) = run_data.outMat{n}{4};
+                    end
+                    if isempty(run_data.outMat{n}{5})
+                        intensity(n) = NaN;
+                    else
+                        intensity(n) = run_data.outMat{n}{5};
+                    end
                 end
             end
 
-        else
-            % read 4 and 5
-            for n = 1: length(outMat)
-                if isempty(outMat{n}{4})
-                    valence(n) = c;
-                else
-                    valence(n) = outMat{n}{4};
-                end
-                if isempty(outMat{n}{5})
-                    intensity(n) = c;
-                else
-                    intensity(n) = outMat{n}{5};
-                end
-            end
+            valence_all = [valence_all, valence];
+            intensity_all = [intensity_all, intensity];
 
+            cue_file = fullfile(cuelistdir, subjname, ...
+                ['session', num2str(sesidx)], ...
+                ['cuelist_sess', num2str(sesidx), '_run', num2str(runidx), '.mat']);
+            cue_data = load(cue_file);
+            odor = [odor; cue_data.cuelist.odor];
+            category = [category, cue_data.cuelist.category];
 
+            fprintf('%s: loaded session %d run %d.\n', subjname, sesidx, runidx);
         end
-
-        valence_all = [valence_all, valence]; 
-        intensity_all = [intensity_all, intensity]; 
-
     end
+
+    valence_all = valence_all - c;
+    intensity_all = intensity_all - c; % center results
+
+    save(fullfile(wkdir, subjname, 'behavior.mat'), ...
+        'intensity_all', 'valence_all', 'odor', 'category', 'odorlabels');
+    fprintf('%s: saved %d runs and %d trials.\n', subjname, nruns, length(valence_all));
 end
 
+%% Exploratory plotting (run this block separately after extraction)
+plot_subjname = 'subj_6';
+load(fullfile(wkdir, plot_subjname, 'behavior.mat'));
 
-valence_all = valence_all - c; 
-intensity_all = intensity_all - c; % center results  
+figure;
+hold on
+plot(valence_all);
+plot(intensity_all);
+legend({'valence', 'intensity'});
+xlabel('n trial');
+ylabel('rating');
 
-%% plot 
-figure; 
-hold on 
-plot(valence_all); 
-plot(intensity_all); 
-legend({'valence', 'intensity'}); 
-xlabel('n trial'); 
-ylabel('rating'); 
-
-%% read cuelist 
-odor = []; 
-category = {}; 
-for sesidx = 1: 16
-    for runidx = 1:10
-        try
-            load(fullfile(cuelistdir, subjname, ['session', num2str(sesidx)], ['cuelist_sess', num2str(sesidx), '_run', num2str(runidx), '.mat']));
-            fprintf('load session %d run %d.   \n', sesidx, runidx); 
-
-        catch
-            continue
-        end
-
-    odor = [odor; cuelist.odor]; 
-    category = [category, cuelist.category]; 
-    end 
-end     
-
-% odor = odor(1:160); 
-% category = category(1:160);
-
-
-%% plot results by odor 
+%% Exploratory plot: results by odor
 
 valence_c = []; 
 valence_f = []; 
@@ -208,13 +200,8 @@ xlabel('odor');
 ylabel('valence rating'); 
 xticklabels(odorlabels); 
 
-title(subjname); 
-
-%% 
-save(fullfile(wkdir, subjname, 'behavior.mat'), 'intensity_all', 'valence_all', 'odor', 'category', 'odorlabels');
+title(plot_subjname);
 %% NOTES 
 % quality check for subject 1
 % valence and intensity ratings are correlated. shouldn't be ? 
-
-
 

@@ -26,6 +26,7 @@ glmsingle_confounds_qc*/
 tmp/
 ROIs/
 motion_qc/
+RDMs/
 
 
 # Design / binary exports
