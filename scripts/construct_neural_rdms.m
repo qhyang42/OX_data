@@ -29,6 +29,15 @@ end
 
 subject_ids = 2:6;
 roi_names = ["AON", "PirF", "PirT", "olfAMG", "olfOFC"];
+roi_selection = 'primary';
+if exist('neural_rdm_options', 'var')
+    subject_ids = neural_rdm_options.SubjectIDs;
+    roi_names = string(neural_rdm_options.ROINames);
+    roi_selection = neural_rdm_options.ROISelection;
+    output_root = neural_rdm_options.OutputDir;
+    clear neural_rdm_options
+    if ~isfolder(output_root), mkdir(output_root); end
+end
 context_order = ["PERSON", "FOOD", "LOCATION", "CONTROL"];
 odor_ids = (1:20)';
 n_conditions = numel(context_order) * numel(odor_ids);
@@ -55,7 +64,7 @@ for subject_id = subject_ids
     gm_mask_file = fullfile(nifti_dir, 'coreg', 'gm_mask_thr05_func.nii');
     functional_mask_file = fullfile(nifti_dir, ...
         'first_level_model_sniff_physio', 'spmT_0001_uncorrected_p001.nii');
-    roi_dir = fullfile(nifti_dir, 'coreg', 'roi_decoding', 'primary');
+    roi_dir = fullfile(nifti_dir, 'coreg', 'roi_decoding', roi_selection);
 
     assert(isfile(fit_file), 'Missing GLMsingle file: %s', fit_file);
     assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
@@ -263,7 +272,7 @@ for subject_id = subject_ids
         'beta_source', fit_file, ...
         'within_run_voxel_centering', true, ...
         'condition_order', 'PERSON, FOOD, LOCATION, CONTROL; odors 1:20', ...
-        'roi_selection', 'primary bilateral', ...
+        'roi_selection', [roi_selection ' bilateral'], ...
         'gray_matter_mask', gm_mask_file, ...
         'functional_mask', functional_mask_file, ...
         'functional_threshold', 'Odor > Rest, uncorrected p < .001', ...

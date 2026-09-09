@@ -202,6 +202,8 @@ ROI registration uses the subject transform chain `standard -> T1 -> whole brain
 
 ### Formal omnibus and rating-displacement RSA
 
+- TU-only omnibus RSA is saved in `RDMs/omnibus_RSA_TU/`, with new TU RDMs in `RDMs/neural_TU/` and entry point `scripts/run_omnibus_rsa_TU.m`. It uses subjects 2, 3, 4, and 6; subject 5 has 6 usable voxels, below the unchanged 10-voxel minimum. The 5,000 permutations match the original mappings for included subjects. BH-FDR is across the four TU predictors; no predictor passes q < .05 (context beta = -0.0211, p = .0252, q = .1008). Existing ROI inputs/results were preserved.
+
 - Entry points are `scripts/run_omnibus_rsa.m` and `scripts/run_rating_displacement_rsa.m`; shared implementation is in `utils/OX_utilities/`. Both reuse saved neural and behavioral RDMs for subjects 2–6 and the five olfactory ROIs, including all four contexts, with simple neural distance and linear fits.
 - Omnibus RSA includes odor identity, context identity, pleasantness distance, and intensity distance. Categorical predictors remain similarity-coded (`1 = same`), so negative categorical betas indicate smaller neural distances for same-identity pairs after adjustment.
 - The primary displacement coefficient model includes both rating changes plus context-pair and odor fixed effects. The context-pair-only adjustment model is retained as sensitivity.

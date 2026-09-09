@@ -182,8 +182,8 @@ for roi_idx = 1:n_rois
         status(roi_idx) = "insufficient_features";
     end
 end
-assert(any(status == "ok"), ...
-    'No requested ROI contains at least %d usable voxels.', opts.MinVoxels);
+% Preserve insufficient-feature rows even when the only requested ROI fails.
+% Their statistics and permutation arrays remain NaN.
 
 roi_results = repmat(struct(), n_rois, 1);
 roi_X = cell(n_rois, 1);
@@ -396,7 +396,7 @@ permutation.exchangeability = ['PERSON/FOOD/LOCATION labels shuffled ' ...
 permutation.max_delta_definition = ['for each subject and ROI separately, ' ...
     'maximum delta-z across that permutation''s valid repeated splits'];
 permutation.roi_pooling = false;
-if n_permutations == 0
+if n_permutations == 0 || ~any(valid_roi)
     permutation.runtime_minutes = 0;
     return;
 end
