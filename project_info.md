@@ -26,7 +26,7 @@ A trial consists of a context cue and narrated scenario, followed by the auditor
 fixation -> context cue -> narrated scenario -> "3, 2, 1, sniff" -> odor/sniff -> ratings
 ```
 
-The primary behavioral result to date is that semantic context modulates odor pleasantness. Pleasantness and intensity are retained as distinct measures.
+The primary behavioral result to date is that semantic context modulates odor pleasantness. Intensity is retained as a separate measure and should not be substituted for pleasantness.
 
 ## Canonical subject-level inputs
 
@@ -139,7 +139,7 @@ bn_amygdala, olf_TU, nonolfAMG
 
 `nonolfAMG` is `BMA + BLA + LA + PCo`. `old_rois/` is the archive used to reproduce legacy analyses. Each active directory contains `roi_manifest.tsv` with source atlas, contributing labels, hemisphere, output file, and voxel count. Current selection options are `ROISelection='primary'`, `'secondary'`, or `'all'`; `'old'` reproduces archived results.
 
-ROI registration uses the subject transform chain `standard -> T1 -> whole brain -> mean functional`, trilinear interpolation, threshold 0.2, and binarization. Geometry matches the subject's functional reference.
+ROI registration uses the subject transform chain `standard -> T1 -> whole brain -> mean functional`, trilinear interpolation, threshold 0.2, and binarization. Geometry must match the subject's functional reference exactly.
 
 Durable multivariate, cross-validation, permutation, feature-count, and group-inference rules are defined in `AGENTS.md` rather than duplicated here.
 
@@ -208,6 +208,8 @@ MRI/group/roi_cross_odor_context_template_loro/
 RDMs/omnibus_RSA/
 RDMs/rating_displacement_RSA/
 ```
+
+Large MRI and derivative files are intentionally ignored by Git. Analysis code and documentation are versioned; the existence of a local derivative should not be inferred from Git history alone.
 
 ## Checklist for future analyses
 
