@@ -21,8 +21,16 @@ Repository layout:
 - `ROIs/`: atlas and ROI resources tracked in Git.
 - `notes/`: brief reminders and subject-specific notes.
 - `archive/`: superseded or discarded code; do not use as the default implementation.
+- `behavior/`: behavior result files. including raw and extracted intensity/pleasantness ratings.
+- `cuelist/`: raw cue lists ran in actual experiment sessions.
+- `data_collection_notes/`: data collection notes collected from actual experiment sessions.
+- `labchart/`: raw labchart export files and extracted event files.
+- `MRI/`: all nifti files and analysis results directly ran on these files.
+- `RDMs/`: derived distance matrices and associated RSA analyses.
+- `results/`: some group level results.
+- `tmp/`: temporary directory for misc logs and verification records. 
 
-Large raw and derived MRI/data directories are intentionally ignored by Git. Never infer that a local derivative exists, is current, or is complete from Git history alone.
+Large raw and derived MRI/data directories are intentionally ignored by Git.  
 
 ## Documentation routing
 
@@ -31,8 +39,8 @@ Before specialized work, read the relevant document:
 - `project_info.md`: current study design, subject set, canonical inputs, ROI definitions, current analysis status, output locations, and current scientific interpretation.
 - `GLMSINGLE_CONFOUNDS.md`: exact construction and provenance rules for run-wise GLMsingle nuisance regressors.
 - `NEMO_OX_PIPELINE_COMPARISON.md`: audit of NEMO versus OX and known limitations of legacy OX analyses.
-- `data_collection_exclusion_review.md`: acquisition-note review and candidate QC issues. This is not a final exclusion list.
-- `roadmap.md`: current figure/analysis planning. Treat it as mutable planning, not as an approved method or result.
+- `data_collection_exclusion_review.md`: acquisition-note review and candidate QC issues. This is not a final exclusion list. Refer to this only when discussing trial exclusion.  
+- `roadmap.md`: Deprecated. Do not use. 
 - `notes/project_notes.md`: scratch reminders and short subject-specific notes.
 
 ## Core study contract
@@ -53,7 +61,7 @@ The trial sequence is:
 fixation -> context cue -> narrated scenario -> "3, 2, 1, sniff" -> odor/sniff -> ratings
 ```
 
-Pleasantness and intensity are distinct behavioral variables. Do not substitute one for the other.
+Pleasantness and intensity are distinct behavioral variables. 
 
 ## Authoritative timing and trial metadata
 
@@ -63,7 +71,7 @@ Pleasantness and intensity are distinct behavioral variables. Do not substitute 
 - Subject 3, runs 1-10 have reversed respiratory polarity. Use `OX_get_respiration_polarity`; do not implement a second ad-hoc correction.
 - Never infer run correspondence from filenames when an explicit metadata mapping exists.
 
-For physiology/TTL work, `GLMSINGLE_CONFOUNDS.md` contains the detailed source-of-truth rules. In particular, do not independently reinterpret or reorder raw LabChart cells.
+For physiology/TTL work, `GLMSINGLE_CONFOUNDS.md` contains the detailed source-of-truth rules. 
 
 ## Canonical fMRI inputs
 
@@ -100,7 +108,7 @@ Non-negotiable conventions:
 - Preserve subject/session/run/trial identifiers through every processing stage.
 - Save enough metadata for a derived result to identify its inputs, subject set, trial set, ROI/restriction criteria, model settings, random seed/permutation count where relevant, and producing script.
 
-`data_collection_exclusion_review.md` is a notes-derived QC review, not an automatic exclusion table. Confirm candidate issues against the relevant behavioral output, acquisition logs, LabChart/respiration traces, motion/QC data, or other authoritative records before changing the analysis dataset.
+`data_collection_exclusion_review.md` is a notes-derived QC review, not an automatic exclusion table. Exclusions would be stated explicitly if needed. 
 
 ## ROI and spatial conventions
 
@@ -176,13 +184,3 @@ Before finishing a substantive change, check:
 4. Cross-validation and permutation exchangeability are correct for the scientific question.
 5. New outputs are separated from smoke tests and legacy results.
 6. Documentation is updated if the change alters a finalized subject set, trial definition, canonical input, ROI set, functional restriction, CV scheme, inference scheme, or output location.
-
-## Scientific interpretation
-
-Separate code correctness from scientific interpretation.
-
-- Distinguish what an analysis directly tests from broader mechanistic interpretation.
-- A decoding failure is not evidence that a representation is absent.
-- A difference in decoding accuracy is not by itself evidence that the underlying representational geometry changed.
-- Exploratory results must remain labeled exploratory.
-- When an analysis has multiple plausible explanations, preserve those alternatives rather than silently selecting one.
