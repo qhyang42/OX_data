@@ -4,17 +4,27 @@ function results = OX_searchlight_context_split_half_similarity( ...
 %
 %   RESULTS = OX_SEARCHLIGHT_CONTEXT_SPLIT_HALF_SIMILARITY(SUBJIDX, ...)
 %
-% The analysis uses physio-regressed odor-aligned GLMsingle estimates and
-% restricts centers and features to the union of bilateral TU, AON, PirF,
-% PirT, olfAMG, EC, and HIPP, intersected with gray matter and the fixed
-% uncorrected Odor > Rest p<.001 mask. Three context-specific cross-half
-% similarity maps are corrected together with a participant-level
-% studentized maximum statistic.
+% ROI accepts a bilateral ROI name, a functional-space NIfTI mask path,
+% or a string array/cellstr of names/paths (combined as a union). Omitted
+% or empty ROI uses bilateral TU, AON, PirF, PirT, olfAMG, EC, and HIPP.
+% 'ROI', 'global' uses the entire functional grid without an ROI boundary.
+% All selections intersect gray matter, the fixed uncorrected Odor > Rest
+% p<.001 mask, and finite physio-regressed odor-aligned GLMsingle estimates.
+% Centers and features share this mask. Three context-specific cross-half
+% maps are corrected together by a participant-level maximum statistic.
+% Non-default selections get a separate default output subdirectory;
+% OutputDir overrides this. Output filenames retain their legacy prefix.
+%
+%   OX_searchlight_context_split_half_similarity(2, 'ROI', 'global')
+%   OX_searchlight_context_split_half_similarity(2, 'ROI', ["PirF", "PirT"])
+%   OX_searchlight_context_split_half_similarity(2, 'ROI', '/path/mask.nii')
 
 p = inputParser;
 p.FunctionName = mfilename;
 addRequired(p, 'subjidx', @(x) isnumeric(x) && isscalar(x) && ...
     isfinite(x) && x == round(x));
+addParameter(p, 'ROI', [], @(x) isempty(x) || ischar(x) || ...
+    isstring(x) || iscellstr(x));
 addParameter(p, 'MRIRoot', '', ...
     @(x) ischar(x) || (isstring(x) && isscalar(x)));
 addParameter(p, 'CueRoot', '', ...
@@ -71,19 +81,10 @@ gm_mask_file = fullfile(nifti_dir, 'coreg', 'gm_mask_thr05_func.nii');
 functional_mask_file = fullfile(nifti_dir, ...
     'first_level_model_sniff_physio', ...
     'spmT_0001_uncorrected_p001.nii');
-if strlength(string(opts.OutputDir)) == 0
-    output_dir = fullfile(nifti_dir, ...
-        'olf_context_similarity_searchlight');
-else
-    output_dir = char(string(opts.OutputDir));
-end
 assert(isfile(fit_file), 'Missing GLMsingle file: %s', fit_file);
 assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
 assert(isfile(functional_mask_file), ...
     'Missing functional restriction mask: %s', functional_mask_file);
-if opts.SaveOutputs && ~isfolder(output_dir)
-    mkdir(output_dir);
-end
 
 fprintf('\n[OLF CONTEXT SIMILARITY SEARCHLIGHT] %s\n', subject_name);
 fprintf('Loading %s\n', fit_file);
@@ -120,7 +121,17 @@ assert_same_geometry(functional_header, gm_header, ...
     functional_mask_file, gm_mask_file);
 functional_mask = spm_read_vols(functional_header) > 0;
 
-[roi_union, roi_metadata] = load_roi_union(nifti_dir, gm_header);
+[roi_union, roi_metadata, roi_label] = OX_load_searchlight_roi_union( ...
+    nifti_dir, gm_header, opts.ROI);
+if strlength(string(opts.OutputDir)) == 0
+    output_dir = fullfile(nifti_dir, 'olf_context_similarity_searchlight');
+    if roi_label ~= "olfactory"
+        output_dir = fullfile(output_dir, char(roi_label));
+    end
+else
+    output_dir = char(string(opts.OutputDir));
+end
+fprintf('ROI selection: %s\n', roi_label);
 finite_model_rows = all(isfinite(modelmd), 2);
 finite_volume = false(size(gm_mask));
 finite_volume(gm_indices) = finite_model_rows;
@@ -204,7 +215,7 @@ results.preprocessing = struct( ...
     'gray_matter_mask', gm_mask_file, ...
     'functional_restriction', functional_mask_file);
 results.inputs = struct('fit_file', fit_file, ...
-    'roi_metadata', roi_metadata);
+    'roi_metadata', roi_metadata, 'roi_selection', roi_label);
 results.trial_metadata = trial_metadata;
 results.mask = struct( ...
     'n_roi_union_voxels', nnz(roi_union), ...
@@ -248,6 +259,9 @@ results.runtime_minutes = toc(analysis_tic) / 60;
 results.matlab_version = version;
 
 if opts.SaveOutputs
+    if ~isfolder(output_dir)
+        mkdir(output_dir);
+    end
     write_outputs(results, gm_header, size(gm_mask), roi_union, final_mask, ...
         valid_centers, feature_linear_indices, output_dir);
     if ~opts.KeepCheckpoint && isfile(checkpoint_file)
@@ -261,36 +275,6 @@ if opts.SaveOutputs
 end
 fprintf('Completed %s in %.1f minutes.\n', subject_name, ...
     toc(analysis_tic) / 60);
-end
-
-function [roi_union, metadata] = load_roi_union(nifti_dir, reference_header)
-roi_root = fullfile(nifti_dir, 'coreg', 'roi_decoding');
-names = ["TU"; "AON"; "PirF"; "PirT"; "olfAMG"; "EC"; "HIPP"];
-groups = ["secondary"; "primary"; "primary"; "primary"; ...
-          "primary"; "primary"; "primary"];
-basenames = ["olf_TU_bilateral_func_thr02.nii"; ...
-             "AON_bilateral_func_thr02.nii"; ...
-             "PirF_bilateral_func_thr02.nii"; ...
-             "PirT_bilateral_func_thr02.nii"; ...
-             "olfAMG_bilateral_func_thr02.nii"; ...
-             "EC_bilateral_func_thr02.nii"; ...
-             "HIPP_bilateral_func_thr02.nii"];
-roi_union = false(reference_header.dim);
-n_mask_voxels = zeros(numel(names), 1);
-files = strings(numel(names), 1);
-for roi_idx = 1:numel(names)
-    files(roi_idx) = fullfile(roi_root, groups(roi_idx), basenames(roi_idx));
-    assert(isfile(files(roi_idx)), 'Missing ROI mask: %s', files(roi_idx));
-    header = spm_vol(char(files(roi_idx)));
-    assert_same_geometry(header, reference_header, files(roi_idx), ...
-        reference_header.fname);
-    mask = spm_read_vols(header) > 0;
-    n_mask_voxels(roi_idx) = nnz(mask);
-    roi_union = roi_union | mask;
-end
-metadata = table(names, groups, basenames, files, n_mask_voxels, ...
-    'VariableNames', {'roi', 'selection_group', 'basename', 'file', ...
-    'n_mask_voxels'});
 end
 
 function [null_stats, metadata, checkpoint_file] = run_permutations( ...

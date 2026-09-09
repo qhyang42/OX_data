@@ -22,6 +22,10 @@ assert(isequaln(plot_results.models.beta(:,1:5,:),A.models.beta));
 assert(isequaln(plot_results.models.beta(rows,6,:),B.models.beta));
 plot_results.figure_note=["Signed-beta BH-FDR: original ROIs, 20 tests; TU, 4 separate tests"; ...
     "* q < 0.05, ** q < 0.01, *** q < 0.001 | TU excludes subject 5 (<10 voxels)"];
+% Display TU first, followed by the original ROI order.
+roi_order=[6,1:5];
+plot_results.roi_names=plot_results.roi_names(roi_order);
+plot_results.models.beta=plot_results.models.beta(:,roi_order,:);
 OX_plot_formal_rsa(plot_results);
 save(fullfile(folder,'figures','combined_with_TU_plot_data.mat'),'plot_results','-v7.3');
 fid=fopen(fullfile(folder,'figures','README.md'),'w'); assert(fid>=0);

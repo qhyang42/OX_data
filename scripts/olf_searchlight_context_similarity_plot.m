@@ -19,7 +19,7 @@
 
 %% 1. Editable plotting settings
 subject_id = 6;                 % completed participants: 2:6
-context_name = "LOCATION";       % "PERSON", "FOOD", or "LOCATION"
+context_name = "PERSON";       % "PERSON", "FOOD", or "LOCATION"
 
 % Which statistic supplies marker colors. The significance mask is always
 % the joint max-statistic FWE p<=.05 result unless ShowOnlySignificant=false.
