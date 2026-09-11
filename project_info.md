@@ -148,10 +148,17 @@ Durable multivariate, cross-validation, permutation, feature-count, and group-in
 ### Behavioral and univariate work
 
 - Behavioral preprocessing and analysis are complete for the five analyzed participants; context modulation of pleasantness is established at the descriptive/project level.
+- `scripts/behavior_analysis.m` regenerates both legacy correlation boxplot variants for pleasantness and intensity for subjects 2–6 in `results/behavior/`, with trial metadata, missing-rating counts, condition-level descriptive statistics, and reproducible sampled correlations. These shared-trial resampling distributions are descriptive, not independent observations for inference.
 - Sniff/odor-aligned simple response maps and context contrasts have been generated.
 - Cue-aligned context maps were explored and were difficult to interpret. Countdown-aligned maps were more plausible and qualitatively resembled sniff-aligned maps.
 - Physio-regressed sniff-only and sniff-by-category first-level SPM models are available for subjects 2-6. The sniff-only model supplies the current functional restriction masks.
 - GLMsingle context contrast maps for sniff and countdown estimates are implemented by `scripts/run_glmsingle_context_contrasts.m`.
+
+### Group univariate contrast displays in MNI space
+
+- `scripts/group_fwe_contrasts_mni.py` generates descriptive group displays in `results/contrast_map/` from the existing sniff-aligned, physiology-regressed positive SPM FWE `p < .001` maps for subjects 2–6: Odor > Rest and each of PERSON, FOOD, LOCATION > mean of the other three contexts (including CONTROL).
+- Existing `inverse(std2T1mat) × func2T1mat` affine transforms project maps to the repository MNI152 1-mm reference with nearest-neighbour interpolation. Mean thresholded t maps use a fixed denominator of five and zero background; integer significance-count maps and fractions retain individual threshold decisions. SPM estimation-mask coverage counts and individual MNI outputs are also saved.
+- These are descriptive averages and overlap maps, not group-level FWE inference. The output README and manifest record source hashes, transforms, validation, coverage, and color conventions.
 
 ### ROI organization and QC
 
@@ -197,6 +204,14 @@ Durable multivariate, cross-validation, permutation, feature-count, and group-in
 - Searchlight final restriction masks, valid-center masks, effect maps, uncorrected p maps, max-stat FWE p maps, and full result/checkpoint files are in `MRI/subj_N/nifti/olf_context_similarity_searchlight/`.
 - This analysis currently has participant-level inference only; it is not a group searchlight result until a prespecified common-space group model is added.
 - `scripts/olf_searchlight_context_similarity_plot.m` creates an exploratory flattened ROI-topology display. It is deliberately non-anatomical and must not be presented as a brain-coordinate map.
+
+### Global context-similarity searchlight and native T1 projections
+
+- Completed global results for subjects 2–6 are in `MRI/subj_N/nifti/olf_context_similarity_searchlight/global/`. Saved settings confirm 6-mm spheres, at least 10 usable features, 200 session-balanced splits, and 5,000 within-run permutations, with participant-level max-stat FWE correction across centers × three semantic contexts.
+- Global support is the acquired functional grid intersected with GM, positive Odor > Rest uncorrected `p < .001`, and finite GLMsingle rows; it does not imply unrestricted whole-brain coverage.
+- `scripts/project_global_searchlight_to_T1.py` projects the saved maps using each participant's established `coreg/func2T1mat` and `anat/betT1brain.nii.gz` reference. Completed projections are in each global folder's `native_T1/` subdirectory. Native functional outputs are preserved.
+- All maps use nearest-neighbour resampling to retain source values and significance decisions. Each subject has 19 projected maps plus six FWE-masked delta-z/null-z overlays. Background is zero for effect maps and one for p maps; the transformed valid-center mask distinguishes unsupported voxels from measured zeros. These are display-space derivatives, not new statistical tests.
+- Each projection folder contains `README.md` and `projection_manifest.json` with source/reference/transform hashes, interpolation, and validation records. The runner refuses to overwrite an existing projection folder.
 
 ## Where to find group outputs
 
