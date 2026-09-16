@@ -30,11 +30,21 @@ end
 subject_ids = 2:6;
 roi_names = ["AON", "PirF", "PirT", "olfAMG", "olfOFC"];
 roi_selection = 'primary';
+use_functional_restriction = true;
+compute_crossnobis = true;
 if exist('neural_rdm_options', 'var')
     subject_ids = neural_rdm_options.SubjectIDs;
     roi_names = string(neural_rdm_options.ROINames);
     roi_selection = neural_rdm_options.ROISelection;
     output_root = neural_rdm_options.OutputDir;
+    if isfield(neural_rdm_options,'UseFunctionalRestriction')
+        use_functional_restriction = neural_rdm_options.UseFunctionalRestriction;
+        assert(islogical(use_functional_restriction) && isscalar(use_functional_restriction));
+    end
+    if isfield(neural_rdm_options,'ComputeCrossnobis')
+        compute_crossnobis = neural_rdm_options.ComputeCrossnobis;
+        assert(islogical(compute_crossnobis) && isscalar(compute_crossnobis));
+    end
     clear neural_rdm_options
     if ~isfolder(output_root), mkdir(output_root); end
 end
@@ -42,6 +52,7 @@ context_order = ["PERSON", "FOOD", "LOCATION", "CONTROL"];
 odor_ids = (1:20)';
 n_conditions = numel(context_order) * numel(odor_ids);
 n_splits = 200;
+if ~compute_crossnobis, n_splits = 0; end
 n_candidate_splits = 100000;
 split_seed = 1;
 min_voxels = 10;
@@ -53,7 +64,7 @@ condition_label = condition_context + "_odor" + string(condition_odor);
 condition_metadata = table(condition_index, condition_context, ...
     condition_odor, condition_label);
 
-run_crossnobis_synthetic_checks();
+if compute_crossnobis, run_crossnobis_synthetic_checks(); end
 
 for subject_id = subject_ids
     subject_tic = tic;
@@ -68,8 +79,14 @@ for subject_id = subject_ids
 
     assert(isfile(fit_file), 'Missing GLMsingle file: %s', fit_file);
     assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
-    assert(isfile(functional_mask_file), ...
-        'Missing functional restriction mask: %s', functional_mask_file);
+    if use_functional_restriction
+        assert(isfile(functional_mask_file), ...
+            'Missing functional restriction mask: %s', functional_mask_file);
+        functional_threshold = 'Odor > Rest, uncorrected p < .001';
+    else
+        functional_mask_file = '';
+        functional_threshold = 'none';
+    end
     assert(isfolder(roi_dir), 'Missing primary ROI directory: %s', roi_dir);
 
     fprintf('\n[NEURAL RDM] Loading %s\n', subject_name);
@@ -101,6 +118,9 @@ for subject_id = subject_ids
         'At least one condition has no trials for %s.', subject_name);
 
     split_seed_subject = split_seed + subject_id * 1000;
+    split_metadata = struct();
+    if compute_crossnobis
+    split_seed_subject = split_seed + subject_id * 1000;
     split_metadata = select_balanced_run_splits( ...
         trial_metadata.run_id, trial_metadata.session_id, ...
         trial_condition_id, n_conditions, n_splits, ...
@@ -109,13 +129,18 @@ for subject_id = subject_ids
         'condition counts per half %d--%d\n'], n_splits, ...
         min(split_metadata.condition_counts, [], 'all'), ...
         max(split_metadata.condition_counts, [], 'all'));
+    end
 
     gm_header = spm_vol(gm_mask_file);
     gm_mask = spm_read_vols(gm_header) > 0;
-    functional_header = spm_vol(functional_mask_file);
-    assert_same_geometry(functional_header, gm_header, ...
-        functional_mask_file, gm_mask_file);
-    functional_mask = spm_read_vols(functional_header) > 0;
+    if use_functional_restriction
+        functional_header = spm_vol(functional_mask_file);
+        assert_same_geometry(functional_header, gm_header, ...
+            functional_mask_file, gm_mask_file);
+        functional_mask = spm_read_vols(functional_header) > 0;
+    else
+        functional_mask = true(size(gm_mask));
+    end
     restriction_mask = gm_mask & functional_mask;
     gm_indices = find(gm_mask);
     assert(size(modelmd, 1) == numel(gm_indices), ...
@@ -127,6 +152,7 @@ for subject_id = subject_ids
     % This basis removes both run intercepts and condition means from the
     % trial patterns. Its rows provide orthonormal residual contrasts for
     % estimating voxel-by-voxel noise covariance.
+    if compute_crossnobis
     noise_design = make_noise_design(trial_metadata.run_id, ...
         trial_condition_id, n_conditions);
     noise_basis = null(noise_design', 1e-10);
@@ -134,6 +160,7 @@ for subject_id = subject_ids
     expected_df = n_trials - rank(noise_design);
     assert(noise_degrees_of_freedom == expected_df && expected_df > 1, ...
         'Noise residual-basis rank check failed for %s.', subject_name);
+    end
 
     n_rois = numel(roi_names);
     roi_results = repmat(struct(), n_rois, 1);
@@ -167,7 +194,11 @@ for subject_id = subject_ids
         roi_mask_files(roi_index) = string(roi_file);
         roi_mask_voxels(roi_index) = nnz(roi_mask);
         roi_gm_voxels(roi_index) = nnz(roi_mask & gm_mask);
-        roi_restricted_voxels(roi_index) = nnz(restricted_roi_mask);
+        if use_functional_restriction
+            roi_restricted_voxels(roi_index) = nnz(restricted_roi_mask);
+        else
+            roi_restricted_voxels(roi_index) = NaN; % Functional restriction not applied.
+        end
         roi_usable_voxels(roi_index) = n_voxels;
         fprintf('  ROI %s: %d usable voxels\n', roi_name, n_voxels);
 
@@ -189,6 +220,7 @@ for subject_id = subject_ids
             subject_name, roi_name);
         D_neural_simple = min(max(D_neural_simple, 0), 2);
 
+        if compute_crossnobis
         noise_samples = noise_basis' * X_raw;
         [noise_covariance, shrinkage, sample_covariance] = ...
             schafer_strimmer_covariance(noise_samples);
@@ -231,12 +263,17 @@ for subject_id = subject_ids
         validate_rdm(D_neural_crossnobis_sd, n_conditions, false, ...
             sprintf('%s %s crossnobis SD', subject_name, roi_name));
 
+        end
+
+        validate_rdm(D_neural_simple, n_conditions, true, ...
+            sprintf('%s %s simple', subject_name, roi_name));
         roi_results(roi_index).roi_name = char(roi_name);
         roi_results(roi_index).mask_file = char(roi_file);
         roi_results(roi_index).n_voxels = n_voxels;
         roi_results(roi_index).model_feature_indices = feature_indices;
         roi_results(roi_index).condition_patterns = condition_patterns;
         roi_results(roi_index).D_neural_simple = D_neural_simple;
+        if compute_crossnobis
         roi_results(roi_index).D_neural_crossnobis = D_neural_crossnobis;
         roi_results(roi_index).D_neural_crossnobis_splits = ...
             D_neural_crossnobis_splits;
@@ -251,6 +288,7 @@ for subject_id = subject_ids
             'whitening_matrix', whitening_matrix, ...
             'regularized_covariance_eigenvalues', covariance_eigenvalues, ...
             'max_whitening_identity_error', whitening_error);
+        end
     end
 
     roi_metadata = table(roi_names(:), roi_mask_files, roi_mask_voxels, ...
@@ -275,16 +313,24 @@ for subject_id = subject_ids
         'roi_selection', [roi_selection ' bilateral'], ...
         'gray_matter_mask', gm_mask_file, ...
         'functional_mask', functional_mask_file, ...
-        'functional_threshold', 'Odor > Rest, uncorrected p < .001', ...
+        'functional_threshold', functional_threshold, ...
+        'use_functional_restriction', use_functional_restriction, ...
+        'within_run_centering_trials', 'all four contexts, all 800 trials', ...
         'simple_distance', '1 - Pearson correlation across voxels', ...
         'crossnobis_scaling', 'crossvalidated whitened inner product / n_voxels', ...
         'negative_crossnobis_retained', true, ...
         'noise_fixed_effects_removed', 'exact acquisition run and 80-condition means', ...
         'noise_covariance', 'Schaefer-Strimmer off-diagonal shrinkage to diagonal');
+    results.preprocessing.crossnobis_computed = compute_crossnobis;
+    if ~compute_crossnobis
+        results.preprocessing = rmfield(results.preprocessing, ...
+            {'crossnobis_scaling','negative_crossnobis_retained', ...
+             'noise_fixed_effects_removed','noise_covariance'});
+    end
     results.options = struct( ...
         'subject_ids', subject_ids, 'roi_names', roi_names, ...
         'context_order', context_order, 'odor_ids', odor_ids, ...
-        'n_splits', n_splits, 'n_candidate_splits', n_candidate_splits, ...
+        'compute_crossnobis', compute_crossnobis, 'n_splits', n_splits, 'n_candidate_splits', n_candidate_splits, ...
         'split_seed', split_seed_subject, 'min_voxels', min_voxels);
     results.dimension_order = struct( ...
         'condition_patterns', {{'condition', 'voxel'}}, ...

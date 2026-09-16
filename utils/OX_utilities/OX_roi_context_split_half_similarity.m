@@ -5,7 +5,8 @@ function results = OX_roi_context_split_half_similarity(subjidx, varargin)
 %
 % Loads the physio-regressed odor-aligned GLMsingle estimates, restricts
 % features to the requested bilateral ROI, gray matter, and uncorrected
-% Odor > Rest functional mask, and runs repeated independent-run split-half
+% Odor > Rest functional mask (UseFunctionalRestriction=false omits it),
+% and runs repeated independent-run split-half
 % similarity for PERSON, FOOD, and LOCATION. CONTROL trials are excluded.
 %
 % ROISelection is compatible with the existing decoding ROI resolver.
@@ -25,6 +26,8 @@ addParameter(p, 'ROIDir', '', ...
     @(x) ischar(x) || (isstring(x) && isscalar(x)));
 addParameter(p, 'ROINames', ["PirF", "PirT", "AON", "olfOFC", "olfAMG"], ...
     @(x) ischar(x) || iscellstr(x) || isstring(x));
+addParameter(p, 'UseFunctionalRestriction', true, ...
+    @(x) islogical(x) && isscalar(x));
 addParameter(p, 'MinVoxels', 10, ...
     @(x) isnumeric(x) && isscalar(x) && x >= 2 && x == round(x));
 addParameter(p, 'NumSplits', 200, ...
@@ -83,8 +86,12 @@ functional_mask_file = fullfile(nifti_dir, ...
 
 assert(isfile(fit_file), 'Missing GLMsingle file: %s', fit_file);
 assert(isfile(gm_mask_file), 'Missing gray-matter mask: %s', gm_mask_file);
-assert(isfile(functional_mask_file), ...
-    'Missing functional restriction mask: %s', functional_mask_file);
+if opts.UseFunctionalRestriction
+    assert(isfile(functional_mask_file), ...
+        'Missing functional restriction mask: %s', functional_mask_file);
+else
+    functional_mask_file = '';
+end
 assert(exist('spm_vol', 'file') == 2 && exist('spm_read_vols', 'file') == 2, ...
     'SPM must be on the MATLAB path. Run setup_ox first.');
 
@@ -133,10 +140,14 @@ fprintf('ROI selection: %s | requested: %s\n', ...
 
 gm_header = spm_vol(gm_mask_file);
 gm_mask = spm_read_vols(gm_header) > 0;
-functional_header = spm_vol(functional_mask_file);
-assert_same_geometry(functional_header, gm_header, ...
-    functional_mask_file, gm_mask_file);
-functional_mask = spm_read_vols(functional_header) > 0;
+if opts.UseFunctionalRestriction
+    functional_header = spm_vol(functional_mask_file);
+    assert_same_geometry(functional_header, gm_header, ...
+        functional_mask_file, gm_mask_file);
+    functional_mask = spm_read_vols(functional_header) > 0;
+else
+    functional_mask = true(size(gm_mask));
+end
 restriction_mask = gm_mask & functional_mask;
 gm_indices = find(gm_mask);
 assert(size(modelmd, 1) == numel(gm_indices), ...
@@ -166,7 +177,11 @@ for roi_idx = 1:n_rois
     roi_mask = spm_read_vols(roi_header) > 0;
     n_mask_voxels(roi_idx) = nnz(roi_mask);
     n_gm_overlap(roi_idx) = nnz(roi_mask & gm_mask);
-    n_functional_overlap(roi_idx) = nnz(roi_mask & restriction_mask);
+    if opts.UseFunctionalRestriction
+        n_functional_overlap(roi_idx) = nnz(roi_mask & restriction_mask);
+    else
+        n_functional_overlap(roi_idx) = NaN; % Not applied, not a measured overlap.
+    end
     feature_indices = double(model_index_volume(roi_mask & restriction_mask));
     feature_indices = feature_indices(feature_indices > 0);
     if ~isempty(feature_indices)
@@ -339,7 +354,8 @@ results.preprocessing = struct( ...
     'whiten_voxels', false, ...
     'control_trials_used', false, ...
     'gray_matter_mask', gm_mask_file, ...
-    'functional_mask', functional_mask_file);
+    'functional_mask', functional_mask_file, ...
+    'use_functional_restriction', opts.UseFunctionalRestriction);
 results.inputs = struct('fit_file', fit_file, ...
     'roi_selection', roi_selection, 'roi_directories', {roi_dirs});
 results.task_structure = summarize_task_structure(all_trial_metadata);

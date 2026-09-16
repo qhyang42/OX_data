@@ -5,12 +5,13 @@ p.addParameter('NumPermutations',5000,@(x) isscalar(x)&&x>=1&&x==floor(x));
 p.addParameter('PermutationSeed',1001,@(x) isscalar(x)&&x>=0&&x==floor(x));
 p.addParameter('OutputDir','',@(x) ischar(x)||isstring(x));
 p.addParameter('MakePlots',true,@islogical);
-p.addParameter('RunMixedModels',true,@islogical);
+p.addParameter('RunMixedModels',false,@islogical);
 p.addParameter('SubjectIDs',2:6,@(x) isnumeric(x)&&isvector(x)&&all(ismember(x,2:6))&&numel(unique(x))==numel(x));
 p.addParameter('ROINames',["AON","PirF","PirT","olfAMG","olfOFC"],@(x) isstring(x)||iscellstr(x));
 p.addParameter('NeuralDir',fullfile(root,'RDMs','neural'),@(x) ischar(x)||isstring(x));
 p.addParameter('RequireExploratoryReference',true,@islogical);
 p.parse(varargin{:}); opts=p.Results;
+assert(~opts.RunMixedModels,'Context-specific mixed models are disabled here; use run_rating_displacement_mixed_models separately.');
 assert(ismember(string(analysis),["omnibus","displacement"]));
 names=["omnibus_RSA","rating_displacement_RSA"];
 out=string(opts.OutputDir);
@@ -194,10 +195,11 @@ for s=1:nS
 end
 save(fullfile(out,'results.mat'),'results','-v7.3');
 if opts.MakePlots, OX_plot_formal_rsa(results); end
-if string(analysis)=="displacement" && opts.RunMixedModels
-    results.mixed_models=OX_rsa_context_displacement_lme(observations,out,opts.MakePlots);
-    save(fullfile(out,'results.mat'),'results','-v7.3');
-end
+% Context-specific fits disabled: this entry point estimates overall betas only.
+% if string(analysis)=="displacement" && opts.RunMixedModels
+%     results.mixed_models=OX_rsa_context_displacement_lme(observations,out,opts.MakePlots);
+%     save(fullfile(out,'results.mat'),'results','-v7.3');
+% end
 OX_rsa_write_readme(results);
 fprintf('[%s] Complete: %s\n',analysis,out);
 end

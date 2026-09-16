@@ -1,13 +1,15 @@
-function output = OX_rsa_context_displacement_lme(T,out,makeplots)
+function output = OX_rsa_context_displacement_lme(T,out,makeplots,continue_on_failure)
+if nargin<4, continue_on_failure=false; end
 % Pool all three incident pairs for each semantic context, one rating slope.
 T.subject=categorical(T.subject_id); T.odor=categorical(T.odor_id);
 T.subject_odor=categorical(string(T.subject_id)+"_"+string(T.odor_id));
 pairs=unique(string(T.context_pair),'stable'); endpoints=split(string(T.context_pair),'_vs_');
 assert(size(endpoints,2)==2);
 contexts=["PERSON","FOOD","LOCATION"]; rois=unique(T.roi,'stable');
-predictors=["pleasantness","intensity"];
+predictors=["pleasantness","intensity"]; n_rois=numel(rois);
+failures=table();
 slopes=table(); fixed=table(); diagnostics=table(); residual_table=table(); predictions=table(); membership=table();
-models=cell(5,2,3); convergence=cell(5,2,3); covariance=cell(5,2,3);
+models=cell(n_rois,2,3); convergence=cell(n_rois,2,3); covariance=cell(n_rois,2,3);
 formula='neural_distance ~ context_pair + x + (1+x|subject) + (1|odor) + (1|subject_odor)';
 for c=1:3
     include=any(endpoints==contexts(c),2);
@@ -15,12 +17,14 @@ for c=1:3
     membership=[membership;table(repmat(contexts(c),3,1),included_pairs, ...
         'VariableNames',{'focal_context','context_pair'})]; %#ok<AGROW>
     for j=1:2
-        for r=1:5
+        for r=1:n_rois
             S=T(include & T.roi==rois(r),:); S.context_pair=categorical(S.context_pair,included_pairs);
             S.x=S.("abs_delta_"+predictors(j));
             assert(height(S)==300 && numel(unique(S.subject))==5 && all(isfinite(S.x)));
             assert(all(groupcounts(S.subject)==60) && all(groupcounts(S.context_pair)==100));
             assert(all(groupcounts(S.subject_odor)==3),'Each subject-odor must contribute exactly three pairs.');
+            counts_before=[height(slopes),height(fixed),height(diagnostics),height(residual_table),height(predictions)];
+            try
             lastwarn('');
             M=fitlme(S,formula,'FitMethod','REML','CovariancePattern',{'Diagonal','Isotropic','Isotropic'},'CheckHessian',true);
             [wm,wi]=lastwarn; models{r,j,c}=M;
@@ -76,14 +80,30 @@ for c=1:3
                 repmat(contexts(c),100,1),xx,yhat,yci(:,1),yci(:,2), ...
                 'VariableNames',{'roi','predictor','focal_context','absolute_rating_change','prediction','ci_lower','ci_upper'})]; %#ok<AGROW>
             fprintf('[Context mixed model] %s %s %s: %s\n',contexts(c),rois(r),predictors(j),status);
+            catch ME
+                if ~continue_on_failure, rethrow(ME); end
+                slopes=slopes(1:counts_before(1),:); fixed=fixed(1:counts_before(2),:);
+                diagnostics=diagnostics(1:counts_before(3),:); residual_table=residual_table(1:counts_before(4),:);
+                predictions=predictions(1:counts_before(5),:);
+                [wm,wi]=lastwarn;
+                failures=[failures;table(rois(r),predictors(j),contexts(c),string(ME.identifier),string(ME.message),string(wi),string(wm), ...
+                    'VariableNames',{'roi','predictor','focal_context','error_id','error_message','warning_id','warning_message'})];
+                convergence{r,j,c}=struct('status','failed_inference','error',ME.message,'warning',wm);
+                fprintf('[Context mixed model] %s %s %s: FAILED; retained diagnostics.\n',contexts(c),rois(r),predictors(j));
+            end
         end
     end
 end
-assert(height(slopes)==30); slopes.q_value=OX_rsa_bh(slopes.p_value);
+assert(height(slopes)+height(failures)==n_rois*2*3);
+% Keep the complete prespecified family: unavailable tests occupy p=1 slots
+% for adjustment only; their p/q remain unavailable in the failure table.
+q_all=OX_rsa_bh([slopes.p_value;ones(height(failures),1)]);
+slopes.q_value=q_all(1:height(slopes));
 output=struct('grouping',"semantic_context_vs_rest",'formula',formula,'contexts',contexts,'roi_names',rois, ...
     'predictors',predictors,'slopes',slopes,'fixed_effects',fixed,'diagnostics',diagnostics, ...
     'residuals',residual_table,'predictions',predictions,'membership',membership, ...
-    'models',{models},'convergence',{convergence},'covariance',{covariance});
+    'failed_models',failures,'fdr_family_size',n_rois*2*3,'models',{models},'convergence',{convergence},'covariance',{covariance});
+if ~isempty(failures), writetable(failures,fullfile(out,'tables','mixed_model_failures.csv')); end
 writetable(slopes,fullfile(out,'tables','mixed_model_context_slopes.csv'));
 writetable(membership,fullfile(out,'tables','mixed_model_context_membership.csv'));
 writetable(fixed,fullfile(out,'tables','mixed_model_fixed_effects.csv'));
@@ -94,9 +114,9 @@ fid=fopen(fullfile(out,'tables','mixed_model_context_slopes.md'),'w'); assert(fi
 fprintf(fid,['# Semantic-context versus rest: rating-displacement slopes\n\n' ...
     'Each focal context pools its three pairs, including CONTROL (300 observations, five subjects). ' ...
     'One common rating slope is fitted, with pair-specific intercepts. Separate univariate REML models for each rating and ROI; ' ...
-    'two-sided Satterthwaite slope tests and BH-FDR across 30 tests. Semantic-context pools overlap and are not independent cohorts. ' ...
+    'two-sided Satterthwaite slope tests and BH-FDR across %d tests. Semantic-context pools overlap and are not independent cohorts. ' ...
     'This tests rating-displacement association within each context pool, not a difference from slopes in the excluded pairs. ' ...
-    'Standardization uses pooled SD(x)/SD(y) within each fitted subset. CIs are pointwise.\n\n']);
+    'Standardization uses pooled SD(x)/SD(y) within each fitted subset. CIs are pointwise.\n\n'],n_rois*2*3);
 for c=contexts
     fprintf(fid,'## %s versus rest\n\n| ROI | Rating | Raw slope [95%% CI] | Standardized beta | p | q | Status |\n',c);
     fprintf(fid,'| --- | --- | --- | ---: | ---: | ---: | --- |\n');

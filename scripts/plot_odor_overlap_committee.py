@@ -15,17 +15,22 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--plane', choices=('axial', 'coronal'), default='axial')
 parser.add_argument('--context', choices=('ODOR', 'PERSON', 'FOOD', 'LOCATION', 'COMBINED'), default='ODOR')
+parser.add_argument('--analysis', choices=('activation','searchlight'), default='activation')
 args = parser.parse_args()
+searchlight = args.analysis == 'searchlight'
+assert not (searchlight and args.context == 'ODOR')
 plane = args.plane
 context = args.context
 axis = 2 if plane == 'axial' else 1
 coordinate = 'z' if plane == 'axial' else 'y'
 root = Path(__file__).resolve().parents[1]
-folder = root / 'results/contrast_map'
+folder = root / ('results/searchlight_context_split_half_similarity_results' if searchlight else 'results/contrast_map')
 key = 'ODOR_gt_REST' if context == 'ODOR' else context + '_gt_OTHER_CONTEXTS'
+if searchlight:
+    key = context + '_split_half'
 source = folder / f'{key}_n_significant_MNI.nii.gz'
 if context == 'COMBINED':
-    source = folder / 'PERSON_gt_OTHER_CONTEXTS_n_significant_MNI.nii.gz'
+    source = folder / ('PERSON_split_half_n_significant_MNI.nii.gz' if searchlight else 'PERSON_gt_OTHER_CONTEXTS_n_significant_MNI.nii.gz')
 reference = root / 'ROIs/CZ_ROIs_MNI_1mm/MNI152_T1_1mm_brain.nii'
 target = folder / f'{key}_n_significant_MNI_{plane}_committee.png'
 if target.exists():
@@ -53,7 +58,7 @@ norm = BoundaryNorm(np.arange(minimum-.5, 6, 1), 6-minimum)
 combined = {}
 if context == 'COMBINED':
     for name in context_colors:
-        im = nib.as_closest_canonical(nib.load(folder / f'{name}_gt_OTHER_CONTEXTS_n_significant_MNI.nii.gz'))
+        im = nib.as_closest_canonical(nib.load(folder / (f'{name}_split_half_n_significant_MNI.nii.gz' if searchlight else f'{name}_gt_OTHER_CONTEXTS_n_significant_MNI.nii.gz')))
         assert im.shape == ref.shape and np.allclose(im.affine, ref.affine)
         combined[name] = im.get_fdata()
         assert np.isin(combined[name], np.arange(6)).all()
@@ -81,8 +86,8 @@ for ax, z in zip(axes.flat, slices):
     ax.set_title(f'{coordinate} = {z:+d} mm', fontsize=15, color='white', pad=7)
     ax.text(.02, .5, 'L', transform=ax.transAxes, color='#cccccc', fontsize=11, va='center')
     ax.text(.98, .5, 'R', transform=ax.transAxes, color='#cccccc', fontsize=11, ha='right', va='center')
-fig.text(.5, .955, ('Odor > Rest' if context == 'ODOR' else 'Semantic context contrasts' if context == 'COMBINED' else context + ' > Other Contexts'), ha='center', color='white', fontsize=29, weight='bold')
-fig.text(.5, .903, f'Overlap of participant-level FWE p < .001 maps  |  5 participants  |  Display: {minimum}–5', ha='center', color='#dddddd', fontsize=17)
+fig.text(.5, .955, (('Global context split-half similarity' if context == 'COMBINED' else context + ' | Global split-half similarity') if searchlight else 'Odor > Rest' if context == 'ODOR' else 'Semantic context contrasts' if context == 'COMBINED' else context + ' > Other Contexts'), ha='center', color='white', fontsize=29, weight='bold')
+fig.text(.5, .903, f'Participant overlap | Joint max-stat FWE p < .05 | Display: {minimum}–5' if searchlight else f'Overlap of participant-level FWE p < .001 maps  |  5 participants  |  Display: {minimum}–5', ha='center', color='#dddddd', fontsize=17)
 legends = context_colors if context == 'COMBINED' else {context: colors}
 for j, (name, palette) in enumerate(legends.items()):
     x, width = (.12 + j*.28, .20) if context == 'COMBINED' else (.32, .36)
@@ -94,5 +99,5 @@ for j, (name, palette) in enumerate(legends.items()):
 fig.text(.5, .025, f'MNI152  •  {plane.title()} slices every {interval} mm  •  Neurological orientation (L = left)  •  {'Overlapping contexts use blended colors' if context == 'COMBINED' else 'Descriptive overlap'}', ha='center', color='#bbbbbb', fontsize=12)
 fig.savefig(target, dpi=240, facecolor=fig.get_facecolor())
 plt.close(fig)
-(folder / f'{key}_{plane}_committee_plot.json').write_text(json.dumps(dict(source=str(source),underlay=str(reference),output=str(target),plane=plane,slice_coordinate=coordinate,slices_mni_mm=slices,colors_1_to_5=colors,display_minimum=minimum,below_minimum='transparent',context=context,context_palettes=context_colors if context == 'COMBINED' else None,combined_rule='Mean RGB of active context count colors' if context == 'COMBINED' else None,dimensions_pixels=[3840,2160],orientation='neurological'),indent=2))
+(folder / f'{key}_{plane}_committee_plot.json').write_text(json.dumps(dict(analysis=args.analysis,threshold='joint max-stat FWE p < .05' if searchlight else 'FWE p < .001',source=str(source),underlay=str(reference),output=str(target),plane=plane,slice_coordinate=coordinate,slices_mni_mm=slices,colors_1_to_5=colors,display_minimum=minimum,below_minimum='transparent',context=context,context_palettes=context_colors if context == 'COMBINED' else None,combined_rule='Mean RGB of active context count colors' if context == 'COMBINED' else None,dimensions_pixels=[3840,2160],orientation='neurological'),indent=2))
 print(target)
